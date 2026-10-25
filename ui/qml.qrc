@@ -9,6 +9,7 @@
         <file>qml/pages/HomePage.qml</file>
         <file>qml/pages/RosterPage.qml</file>
         <file>qml/pages/HistoryPage.qml</file>
+        <file>qml/pages/ToolsPage.qml</file>
         <file>qml/pages/SettingsPage.qml</file>
         <file>qml/pages/AboutPage.qml</file>
         <file>audio/click.wav</file>

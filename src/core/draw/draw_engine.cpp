@@ -80,6 +80,39 @@ std::vector<Participant> DrawEngine::draw(const std::vector<Participant> &pool, 
     return winners;
 }
 
+std::vector<std::vector<Participant>> DrawEngine::randomGroup(const std::vector<Participant> &pool,
+                                                              int groupCount)
+{
+    std::vector<std::vector<Participant>> groups;
+    if (groupCount <= 0 || pool.empty()) {
+        return groups;
+    }
+
+    const auto groupTotal = std::min(static_cast<std::size_t>(groupCount), pool.size());
+    std::vector<Participant> shuffled = pool;
+    std::shuffle(shuffled.begin(), shuffled.end(), rng_);
+
+    const std::size_t base = shuffled.size() / groupTotal;
+    const std::size_t remainder = shuffled.size() % groupTotal;
+
+    groups.resize(groupTotal);
+    std::size_t cursor = 0;
+    for (std::size_t group = 0; group < groupTotal; ++group) {
+        const std::size_t size = base + (group < remainder ? 1 : 0);
+        groups[group].assign(shuffled.begin() + static_cast<std::ptrdiff_t>(cursor),
+                             shuffled.begin() + static_cast<std::ptrdiff_t>(cursor + size));
+        cursor += size;
+    }
+    return groups;
+}
+
+std::vector<Participant> DrawEngine::randomSeat(const std::vector<Participant> &pool)
+{
+    std::vector<Participant> seats = pool;
+    std::shuffle(seats.begin(), seats.end(), rng_);
+    return seats;
+}
+
 void DrawEngine::clearDrawnHistory()
 {
     drawnIds_.clear();

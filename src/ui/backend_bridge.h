@@ -31,6 +31,8 @@ public:
     Q_INVOKABLE QString drawWinner();
     Q_INVOKABLE QVariantList drawWinners(int count);
     Q_INVOKABLE QVariantList drawMultipleWinners();
+    Q_INVOKABLE QVariantList generateGroups(int groupCount);
+    Q_INVOKABLE QVariantList generateSeats();
     Q_INVOKABLE void updateDrawSettings(int count, int strategy);
     Q_INVOKABLE bool loadRosterFromCsv(const QString &filePath);
     Q_INVOKABLE void openCsvFileDialog();

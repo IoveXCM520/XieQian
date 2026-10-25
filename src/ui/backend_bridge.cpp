@@ -164,6 +164,34 @@ QVariantList BackendBridge::drawMultipleWinners()
     return winners;
 }
 
+QVariantList BackendBridge::generateGroups(int groupCount)
+{
+    QVariantList groups;
+    if (groupCount <= 0) {
+        return groups;
+    }
+
+    for (const std::vector<xieqian::core::Participant> &group :
+         drawEngine_->randomGroup(roster_->enabledParticipants(), groupCount)) {
+        QVariantList members;
+        for (const xieqian::core::Participant &participant : group) {
+            members.append(QString::fromStdString(participant.name));
+        }
+        groups.append(members);
+    }
+    return groups;
+}
+
+QVariantList BackendBridge::generateSeats()
+{
+    QVariantList seats;
+    for (const xieqian::core::Participant &participant :
+         drawEngine_->randomSeat(roster_->enabledParticipants())) {
+        seats.append(QString::fromStdString(participant.name));
+    }
+    return seats;
+}
+
 void BackendBridge::updateDrawSettings(int count, int strategy)
 {
     if (strategy < static_cast<int>(xieqian::core::DrawStrategy::Random) ||

@@ -8,6 +8,12 @@ Item {
     property color bambooColor: "#3F5A4E"
     property color goldColor: "#D4AF37"
 
+    // 扇区渐变的两端色，比底色略亮/略暗
+    property string daiLightColor: "#3A5068"
+    property string daiDarkColor: "#22303F"
+    property string bambooLightColor: "#4E6E60"
+    property string bambooDarkColor: "#2F473D"
+
     // 旋转角度由外部动画驱动，指针与外环保持静止
     property real angle: 0
 
@@ -15,6 +21,23 @@ Item {
 
     implicitWidth: 420
     implicitHeight: 420
+
+    // 金色边框的发光：两层半透明金色矩形向外扩散
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: -14
+        radius: width / 2
+        color: wheelRoot.goldColor
+        opacity: 0.07
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: -7
+        radius: width / 2
+        color: wheelRoot.goldColor
+        opacity: 0.12
+    }
 
     Rectangle {
         anchors.fill: parent
@@ -57,7 +80,13 @@ Item {
                     ctx.moveTo(cx, cy);
                     ctx.arc(cx, cy, radius, startAngle + i * step, startAngle + (i + 1) * step);
                     ctx.closePath();
-                    ctx.fillStyle = i % 2 === 0 ? wheelRoot.daiColor : wheelRoot.bambooColor;
+
+                    var even = i % 2 === 0;
+                    var shade = ctx.createRadialGradient(cx, cy, radius * 0.08, cx, cy, radius);
+                    shade.addColorStop(0, even ? wheelRoot.daiLightColor : wheelRoot.bambooLightColor);
+                    shade.addColorStop(0.62, even ? wheelRoot.daiColor : wheelRoot.bambooColor);
+                    shade.addColorStop(1, even ? wheelRoot.daiDarkColor : wheelRoot.bambooDarkColor);
+                    ctx.fillStyle = shade;
                     ctx.fill();
                     ctx.stroke();
                 }

@@ -212,7 +212,7 @@ Item {
                 }
             }
 
-            // 卡背：宣纸底 + 祥云暗纹
+            // 卡背：宣纸底 + 对称几何暗纹
             Item {
                 id: backFace
 
@@ -249,30 +249,71 @@ Item {
                         var ctx = getContext("2d");
                         ctx.reset();
                         ctx.strokeStyle = "#C9A63E";
-                        ctx.globalAlpha = 0.4;
-                        ctx.lineWidth = 1;
+                        ctx.globalAlpha = 0.36;
 
-                        function cloud(cx, cy) {
+                        var cx = width / 2;
+                        var cy = height / 2;
+                        var unit = Math.min(width, height);
+                        ctx.lineWidth = Math.max(0.6, unit / 120);
+
+                        // 三层菱形骨架，重心固定在卡面中心
+                        function diamond(rx, ry) {
                             ctx.beginPath();
-                            ctx.arc(cx, cy, 9, Math.PI, Math.PI * 2);
-                            ctx.stroke();
-                            ctx.beginPath();
-                            ctx.arc(cx - 10, cy, 6, Math.PI, Math.PI * 2);
-                            ctx.stroke();
-                            ctx.beginPath();
-                            ctx.arc(cx + 10, cy, 6, Math.PI, Math.PI * 2);
-                            ctx.stroke();
-                            ctx.beginPath();
-                            ctx.moveTo(cx - 18, cy);
-                            ctx.lineTo(cx + 18, cy);
+                            ctx.moveTo(cx, cy - ry);
+                            ctx.lineTo(cx + rx, cy);
+                            ctx.lineTo(cx, cy + ry);
+                            ctx.lineTo(cx - rx, cy);
+                            ctx.closePath();
                             ctx.stroke();
                         }
 
-                        var rows = 4;
-                        for (var row = 0; row < rows; ++row) {
-                            var cy = 14 + row * (height - 28) / (rows - 1);
-                            var offset = row % 2 === 0 ? -8 : 8;
-                            cloud(width / 2 + offset, cy);
+                        diamond(width * 0.46, height * 0.46);
+                        diamond(width * 0.36, height * 0.36);
+                        diamond(width * 0.26, height * 0.26);
+
+                        // 中心双环 + 贯穿十字
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, unit * 0.15, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, unit * 0.08, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(cx, cy - height * 0.46);
+                        ctx.lineTo(cx, cy + height * 0.46);
+                        ctx.moveTo(cx - width * 0.46, cy);
+                        ctx.lineTo(cx + width * 0.46, cy);
+                        ctx.stroke();
+
+                        // 四角回纹：中心对称的方折线
+                        function corner(sx, sy) {
+                            var x = cx + sx * width * 0.40;
+                            var y = cy + sy * height * 0.40;
+                            var dx = width * 0.12;
+                            var dy = height * 0.12;
+                            ctx.beginPath();
+                            ctx.moveTo(x, y);
+                            ctx.lineTo(x - sx * dx * 0.45, y);
+                            ctx.lineTo(x - sx * dx * 0.45, y - sy * dy * 0.45);
+                            ctx.lineTo(x - sx * dx, y - sy * dy * 0.45);
+                            ctx.lineTo(x - sx * dx, y - sy * dy);
+                            ctx.stroke();
+                        }
+
+                        corner(1, 1);
+                        corner(1, -1);
+                        corner(-1, 1);
+                        corner(-1, -1);
+
+                        // 上下镜像的弧形交织
+                        for (var i = 0; i < 3; ++i) {
+                            var offset = unit * (0.10 + i * 0.07);
+                            ctx.beginPath();
+                            ctx.arc(cx, cy - height * 0.5 + offset, unit * 0.34, 0.35, Math.PI - 0.35);
+                            ctx.stroke();
+                            ctx.beginPath();
+                            ctx.arc(cx, cy + height * 0.5 - offset, unit * 0.34, Math.PI + 0.35, -0.35, true);
+                            ctx.stroke();
                         }
                     }
                 }

@@ -102,6 +102,43 @@ ApplicationWindow {
         }
     }
 
+    // 背景底纹：极淡的水墨晕染，位置固定以保证重绘结果稳定
+    Canvas {
+        anchors.fill: parent
+
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+
+        onPaint: {
+            var ctx = getContext("2d");
+            ctx.reset();
+            ctx.clearRect(0, 0, width, height);
+
+            var blots = [
+                { x: 0.16, y: 0.22, radius: 0.30, color: "63,90,78" },
+                { x: 0.84, y: 0.16, radius: 0.24, color: "45,62,80" },
+                { x: 0.72, y: 0.80, radius: 0.34, color: "63,90,78" },
+                { x: 0.10, y: 0.74, radius: 0.26, color: "45,62,80" },
+                { x: 0.48, y: 0.50, radius: 0.22, color: "107,122,136" }
+            ];
+
+            for (var i = 0; i < blots.length; ++i) {
+                var blot = blots[i];
+                var cx = blot.x * width;
+                var cy = blot.y * height;
+                var r = blot.radius * Math.min(width, height);
+                var gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+                gradient.addColorStop(0, "rgba(" + blot.color + ",0.055)");
+                gradient.addColorStop(0.55, "rgba(" + blot.color + ",0.025)");
+                gradient.addColorStop(1, "rgba(" + blot.color + ",0)");
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+
     RowLayout {
         anchors.fill: parent
         spacing: 0
@@ -135,6 +172,7 @@ ApplicationWindow {
                         { symbol: "抽", name: "抽奖" },
                         { symbol: "名", name: "名单" },
                         { symbol: "史", name: "历史" },
+                        { symbol: "具", name: "教学工具" },
                         { symbol: "设", name: "设置" },
                         { symbol: "关", name: "关于" }
                     ]
@@ -196,6 +234,8 @@ ApplicationWindow {
             RosterPage {}
 
             HistoryPage {}
+
+            ToolsPage {}
 
             SettingsPage {}
 

@@ -25,6 +25,14 @@ public:
     // 按策略从 pool 中抽取至多 count 名，结果互不重复；count 超过池容量时返回整个池。
     [[nodiscard]] std::vector<Participant> draw(const std::vector<Participant> &pool, int count, DrawStrategy strategy);
 
+    // 随机分组：打乱名单后均匀分配，各组人数差不超过 1，余数优先补到靠前的组；
+    // groupCount 超过池容量时按池容量分组，groupCount 非正或池为空时返回空列表。
+    [[nodiscard]] std::vector<std::vector<Participant>> randomGroup(const std::vector<Participant> &pool,
+                                                                     int groupCount);
+
+    // 随机排座位：返回打乱顺序后的名单副本，原池顺序不变。
+    [[nodiscard]] std::vector<Participant> randomSeat(const std::vector<Participant> &pool);
+
     // NoRepeat 策略下累积的中签记录，清空名单时应同步重置。
     void clearDrawnHistory();
 
