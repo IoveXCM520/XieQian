@@ -24,6 +24,7 @@ signals:
     void mockRosterFailed(const QString &message);
     void awardSpeechReady(const QString &speech);
     void awardSpeechFailed(const QString &message);
+    void networkError(const QString &message);
 
 private:
     enum class RequestKind { MockRoster, AwardSpeech };

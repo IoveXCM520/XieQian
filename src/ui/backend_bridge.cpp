@@ -20,6 +20,7 @@
 #include <QStandardPaths>
 #include <QTemporaryFile>
 #include <QVariantMap>
+#include <QtConcurrentRun>
 
 #include "xieqian/core/io/csv_parser.h"
 
@@ -73,10 +74,24 @@ QString mockCsvContent()
 
 BackendBridge::BackendBridge(QObject *parent)
     : QObject(parent),
-      roster_(std::make_unique<xieqian::core::Roster>()),
+      roster_(std::make_shared<xieqian::core::Roster>()),
       drawEngine_(std::make_unique<xieqian::core::DrawEngine>(seededGenerator())),
       aiManager_(std::make_unique<AiManager>())
 {
+    connect(&rosterWatcher_,
+            &QFutureWatcher<std::shared_ptr<xieqian::core::Roster>>::finished, this, [this]() {
+                const std::shared_ptr<xieqian::core::Roster> parsed = rosterWatcher_.result();
+                if (parsed != nullptr) {
+                    roster_ = parsed;
+                    drawEngine_->clearDrawnHistory();
+                    saveState();
+                    emit rosterUpdated();
+                } else {
+                    qWarning() << "cannot parse roster CSV";
+                }
+                setRosterLoading(false);
+            });
+
     loadState();
 }
 
@@ -238,42 +253,74 @@ void BackendBridge::updateDrawSettings(int count, int strategy)
     emit drawSettingsChanged();
 }
 
-bool BackendBridge::loadRosterFromCsv(const QString &filePath)
+void BackendBridge::loadRosterFromCsv(const QString &filePath)
 {
-    xieqian::core::CsvParser parser;
-    if (!parser.parseFile(QFile::encodeName(filePath).toStdString(), *roster_)) {
-        return false;
-    }
-
-    drawEngine_->clearDrawnHistory();
-    saveState();
-    emit rosterUpdated();
-    return true;
+    startRosterParse(filePath, false);
 }
 
 void BackendBridge::openCsvFileDialog()
 {
+    if (rosterLoading_) {
+        return;
+    }
+
     const QString filePath = QFileDialog::getOpenFileName(nullptr, QStringLiteral("选择名单文件"), QString(),
                                                           QStringLiteral("CSV Files (*.csv)"));
     if (filePath.isEmpty()) {
         return;
     }
 
-    // 导入成功时 loadRosterFromCsv 已经发出 rosterUpdated
-    loadRosterFromCsv(filePath);
+    // 解析在后台线程完成，结束后由 rosterUpdated 通知界面刷新
+    startRosterParse(filePath, false);
 }
 
 void BackendBridge::mockImportCsv()
 {
+    if (rosterLoading_) {
+        return;
+    }
+
     QTemporaryFile file(QDir::tempPath() + QStringLiteral("/xieqian-roster-XXXXXX.csv"));
     if (!file.open()) {
         return;
     }
 
+    // 临时文件由后台解析任务在完成后删除
+    file.setAutoRemove(false);
     file.write(mockCsvContent().toUtf8());
     file.close();
 
-    loadRosterFromCsv(file.fileName());
+    startRosterParse(file.fileName(), true);
+}
+
+void BackendBridge::startRosterParse(const QString &filePath, bool removeFileAfterParse)
+{
+    if (filePath.isEmpty() || rosterLoading_) {
+        return;
+    }
+
+    setRosterLoading(true);
+
+    const QString path = filePath;
+    rosterWatcher_.setFuture(QtConcurrent::run([path, removeFileAfterParse]() -> std::shared_ptr<xieqian::core::Roster> {
+        auto parsed = std::make_shared<xieqian::core::Roster>();
+        xieqian::core::CsvParser parser;
+        const bool ok = parser.parseFile(QFile::encodeName(path).toStdString(), *parsed);
+        if (removeFileAfterParse) {
+            QFile::remove(path);
+        }
+        return ok ? parsed : nullptr;
+    }));
+}
+
+void BackendBridge::setRosterLoading(bool loading)
+{
+    if (rosterLoading_ == loading) {
+        return;
+    }
+
+    rosterLoading_ = loading;
+    emit rosterLoadingChanged();
 }
 
 QVariantList BackendBridge::getParticipantsWithStatus()
@@ -410,6 +457,11 @@ bool BackendBridge::motionEnabled() const
 AiManager *BackendBridge::aiManager() const
 {
     return aiManager_.get();
+}
+
+bool BackendBridge::rosterLoading() const
+{
+    return rosterLoading_;
 }
 
 void BackendBridge::setMotionEnabled(bool enabled)

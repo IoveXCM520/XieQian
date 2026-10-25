@@ -45,6 +45,7 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
+            cacheBuffer: 2000
             model: page.records
 
             delegate: Item {

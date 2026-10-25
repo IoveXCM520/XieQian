@@ -40,33 +40,38 @@ std::vector<Participant> DrawEngine::draw(const std::vector<Participant> &pool, 
         return drawWeighted(pool, wanted);
     }
 
-    std::vector<Participant> unseen;
-    std::vector<Participant> seen;
+    // 只移动索引，避免在大名单上复制 Participant；最后按索引回填中签者。
+    std::vector<std::size_t> unseen;
+    std::vector<std::size_t> seen;
+    unseen.reserve(pool.size());
     if (strategy == DrawStrategy::NoRepeat) {
-        for (const Participant &participant : pool) {
-            const auto id = participantId(participant);
+        seen.reserve(pool.size());
+        for (std::size_t index = 0; index < pool.size(); ++index) {
+            const auto id = participantId(pool[index]);
             const bool drawn = std::find(drawnIds_.begin(), drawnIds_.end(), id) != drawnIds_.end();
-            (drawn ? seen : unseen).push_back(participant);
+            (drawn ? seen : unseen).push_back(index);
         }
     } else {
-        unseen = pool;
+        for (std::size_t index = 0; index < pool.size(); ++index) {
+            unseen.push_back(index);
+        }
     }
 
     std::shuffle(unseen.begin(), unseen.end(), rng_);
     std::shuffle(seen.begin(), seen.end(), rng_);
 
     winners.reserve(wanted);
-    for (const Participant &participant : unseen) {
+    for (const std::size_t index : unseen) {
         if (winners.size() == wanted) {
             break;
         }
-        winners.push_back(participant);
+        winners.push_back(pool[index]);
     }
-    for (const Participant &participant : seen) {
+    for (const std::size_t index : seen) {
         if (winners.size() == wanted) {
             break;
         }
-        winners.push_back(participant);
+        winners.push_back(pool[index]);
     }
 
     if (strategy == DrawStrategy::NoRepeat) {

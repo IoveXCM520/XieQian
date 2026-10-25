@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 
+#include <QFutureWatcher>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -24,6 +25,7 @@ class BackendBridge : public QObject
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundEnabledChanged)
     Q_PROPERTY(bool motionEnabled READ motionEnabled WRITE setMotionEnabled NOTIFY motionEnabledChanged)
     Q_PROPERTY(AiManager *aiManager READ aiManager CONSTANT)
+    Q_PROPERTY(bool rosterLoading READ rosterLoading NOTIFY rosterLoadingChanged)
 
 public:
     enum class DrawMode { Wheel = 0, FlipCard = 1, BlindBox = 2 };
@@ -37,7 +39,7 @@ public:
     Q_INVOKABLE QVariantList generateSeats();
     Q_INVOKABLE void applyMockRoster(const QVariantList &roster);
     Q_INVOKABLE void updateDrawSettings(int count, int strategy);
-    Q_INVOKABLE bool loadRosterFromCsv(const QString &filePath);
+    Q_INVOKABLE void loadRosterFromCsv(const QString &filePath);
     Q_INVOKABLE void openCsvFileDialog();
     Q_INVOKABLE void mockImportCsv();
     Q_INVOKABLE QVariantList getParticipantsWithStatus();
@@ -67,6 +69,8 @@ public:
 
     AiManager *aiManager() const;
 
+    bool rosterLoading() const;
+
 signals:
     void rosterUpdated();
     void historyUpdated();
@@ -76,6 +80,7 @@ signals:
     void winnersDrawn(const QStringList &names, int mode);
     void soundEnabledChanged();
     void motionEnabledChanged();
+    void rosterLoadingChanged();
 
 private:
     struct HistoryEntry {
@@ -88,9 +93,11 @@ private:
     [[nodiscard]] QJsonObject stateToJson() const;
     void saveState() const;
     void loadState();
+    void startRosterParse(const QString &filePath, bool removeFileAfterParse);
+    void setRosterLoading(bool loading);
     [[nodiscard]] static QString dataFilePath();
 
-    std::unique_ptr<xieqian::core::Roster> roster_;
+    std::shared_ptr<xieqian::core::Roster> roster_;
     std::unique_ptr<xieqian::core::DrawEngine> drawEngine_;
     std::unique_ptr<AiManager> aiManager_;
     std::vector<HistoryEntry> history_;
@@ -99,4 +106,6 @@ private:
     xieqian::core::DrawStrategy drawStrategy_ = xieqian::core::DrawStrategy::Random;
     bool soundEnabled_ = true;
     bool motionEnabled_ = true;
+    bool rosterLoading_ = false;
+    QFutureWatcher<std::shared_ptr<xieqian::core::Roster>> rosterWatcher_;
 };

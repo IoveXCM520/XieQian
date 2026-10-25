@@ -16,6 +16,7 @@ ApplicationWindow {
     visible: true
     title: qsTr("撷签")
     color: "#F8F6F0"
+    font.pixelSize: 14
 
     property int currentPage: 0
     readonly property string audioBase: "qrc:/ui/audio/"

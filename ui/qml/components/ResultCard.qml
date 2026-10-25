@@ -57,6 +57,13 @@ Item {
             cardRoot.aiBusy = false;
             cardRoot.aiError = message;
         }
+
+        function onNetworkError(message) {
+            if (!cardRoot.visible)
+                return;
+            cardRoot.aiBusy = false;
+            cardRoot.aiError = message;
+        }
     }
 
     NumberAnimation {
@@ -92,6 +99,7 @@ Item {
         anchors.right: parent.right
         height: 1
         emitRate: cardRoot.multi ? 36 : 26
+        maximumEmitted: cardRoot.multi ? 60 : 40
         lifeSpan: 2600
         lifeSpanVariation: 800
         size: 10
@@ -180,6 +188,14 @@ Item {
             visible: !cardRoot.multi && cardRoot.aiSpeech.length === 0
             enabled: !cardRoot.aiBusy
             text: cardRoot.aiBusy ? "思考中..." : "✨ 获取 AI 点评"
+            scale: aiButton.pressed ? 0.95 : 1.0
+
+            Behavior on scale {
+                NumberAnimation {
+                    duration: 120
+                    easing.type: Easing.OutCubic
+                }
+            }
 
             onClicked: cardRoot.requestAiSpeech()
 

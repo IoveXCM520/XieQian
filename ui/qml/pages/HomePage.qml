@@ -177,14 +177,26 @@ Item {
         onActivated: page.startDraw()
     }
 
-    OpacityAnimator {
+    ParallelAnimation {
         id: cardFadeIn
 
-        target: resultCard
-        from: 0
-        to: 1
-        duration: 420
-        easing.type: Easing.OutCubic
+        NumberAnimation {
+            target: resultCard
+            property: "opacity"
+            from: 0
+            to: 1
+            duration: 300
+            easing.type: Easing.OutCubic
+        }
+
+        NumberAnimation {
+            target: resultCard
+            property: "scale"
+            from: 0.92
+            to: 1
+            duration: 420
+            easing.type: Easing.OutBack
+        }
     }
 
     OpacityAnimator {
@@ -380,6 +392,14 @@ Item {
             hoverEnabled: true
             enabled: backendBridge.rosterCount > 0
             text: backendBridge.rosterCount > 0 ? "抽 取" : "暂无数据"
+            scale: drawButton.pressed ? 0.95 : 1.0
+
+            Behavior on scale {
+                NumberAnimation {
+                    duration: 120
+                    easing.type: Easing.OutCubic
+                }
+            }
 
             onClicked: page.startDraw()
 

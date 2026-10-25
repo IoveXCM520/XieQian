@@ -52,6 +52,11 @@ Item {
             page.aiBusy = false;
             page.aiMessage = message;
         }
+
+        function onNetworkError(message) {
+            page.aiBusy = false;
+            page.aiMessage = message;
+        }
     }
 
     ColumnLayout {
@@ -110,7 +115,15 @@ Item {
                 implicitWidth: 200
                 implicitHeight: 40
                 text: page.aiBusy ? "AI 正在思考中..." : "✨ AI 生成测试名单"
-                enabled: !page.aiBusy
+                enabled: !page.aiBusy && !backendBridge.rosterLoading
+                scale: aiButton.pressed ? 0.95 : 1.0
+
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: 120
+                        easing.type: Easing.OutCubic
+                    }
+                }
 
                 onClicked: page.startAiRoster()
 
@@ -136,15 +149,24 @@ Item {
 
                 implicitWidth: 150
                 implicitHeight: 40
-                text: "导入 CSV 名单"
+                text: backendBridge.rosterLoading ? "正在解析中..." : "导入 CSV 名单"
+                enabled: !backendBridge.rosterLoading
+                scale: importButton.pressed ? 0.95 : 1.0
+
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: 120
+                        easing.type: Easing.OutCubic
+                    }
+                }
 
                 onClicked: backendBridge.openCsvFileDialog()
 
                 background: Rectangle {
                     radius: 2
-                    color: importButton.hovered ? "#3A4E63" : "#2D3E50"
+                    color: importButton.enabled ? (importButton.hovered ? "#3A4E63" : "#2D3E50") : "#B9C2CB"
                     border.width: 1
-                    border.color: "#D4AF37"
+                    border.color: importButton.enabled ? "#D4AF37" : "#B9C2CB"
                 }
 
                 contentItem: Text {
@@ -179,6 +201,7 @@ Item {
             Layout.fillHeight: true
             spacing: 10
             clip: true
+            cacheBuffer: 2000
             model: page.participants
 
             delegate: Rectangle {

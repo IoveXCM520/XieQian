@@ -1,11 +1,13 @@
 #include "ai_manager.h"
 
+#include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
 
@@ -16,7 +18,7 @@
 
 namespace {
 
-constexpr int kRequestTimeoutMs = 60000;
+constexpr int kRequestTimeoutMs = 15000;
 
 QString apiKey()
 {
@@ -79,14 +81,25 @@ void AiManager::requestCompletion(const QString &prompt, RequestKind kind)
     QNetworkRequest request(QUrl(QStringLiteral("https://api.deepseek.com/chat/completions")));
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     request.setRawHeader("Authorization", "Bearer " + key.toUtf8());
-    request.setTransferTimeout(kRequestTimeoutMs);
 
     QNetworkReply *reply = network_->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+
+    // 硬性超时：超时后中止请求，finished 中统一发出 networkError
+    QTimer::singleShot(kRequestTimeoutMs, reply, [reply]() {
+        if (reply->isRunning()) {
+            qWarning() << "AI request timed out";
+            reply->abort();
+        }
+    });
+
     connect(reply, &QNetworkReply::finished, this, [this, reply, kind]() {
         reply->deleteLater();
 
         if (reply->error() != QNetworkReply::NoError) {
-            emitFailure(kind, reply->errorString());
+            qWarning() << "AI request failed:" << reply->errorString();
+            const bool timedOut = reply->error() == QNetworkReply::OperationCanceledError;
+            emit networkError(timedOut ? QStringLiteral("网络拥堵，请稍后再试")
+                                       : QStringLiteral("网络异常，请稍后再试"));
             return;
         }
 

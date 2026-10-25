@@ -172,6 +172,14 @@ Item {
                         implicitHeight: 40
                         text: "开始分组"
                         enabled: backendBridge.rosterCount > 0 && groupCountField.acceptableInput
+                        scale: groupButton.pressed ? 0.95 : 1.0
+
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: 120
+                                easing.type: Easing.OutCubic
+                            }
+                        }
 
                         onClicked: page.startGrouping()
 
@@ -336,6 +344,14 @@ Item {
                         implicitHeight: 40
                         text: "生成座位表"
                         enabled: backendBridge.rosterCount > 0
+                        scale: seatButton.pressed ? 0.95 : 1.0
+
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: 120
+                                easing.type: Easing.OutCubic
+                            }
+                        }
 
                         onClicked: page.startSeating()
 
