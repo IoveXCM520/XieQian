@@ -4,8 +4,10 @@
 #include <string>
 
 #include <QDateTime>
+#include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QTemporaryFile>
 #include <QVariantMap>
 
@@ -82,6 +84,18 @@ bool BackendBridge::loadRosterFromCsv(const QString &filePath)
     return true;
 }
 
+void BackendBridge::openCsvFileDialog()
+{
+    const QString filePath = QFileDialog::getOpenFileName(nullptr, QStringLiteral("选择名单文件"), QString(),
+                                                          QStringLiteral("CSV Files (*.csv)"));
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    // 导入成功时 loadRosterFromCsv 已经发出 rosterUpdated
+    loadRosterFromCsv(filePath);
+}
+
 void BackendBridge::mockImportCsv()
 {
     QTemporaryFile file(QDir::tempPath() + QStringLiteral("/xieqian-roster-XXXXXX.csv"));
@@ -133,6 +147,47 @@ QVariantList BackendBridge::getHistory()
         history.append(record);
     }
     return history;
+}
+
+void BackendBridge::clearAllData()
+{
+    roster_->clear();
+    history_.clear();
+
+    emit rosterUpdated();
+    emit historyUpdated();
+}
+
+bool BackendBridge::soundEnabled() const
+{
+    return soundEnabled_;
+}
+
+void BackendBridge::setSoundEnabled(bool enabled)
+{
+    if (soundEnabled_ == enabled) {
+        return;
+    }
+
+    soundEnabled_ = enabled;
+    qInfo() << "sound enabled:" << enabled;
+    emit soundEnabledChanged();
+}
+
+bool BackendBridge::highMotion() const
+{
+    return highMotion_;
+}
+
+void BackendBridge::setHighMotion(bool enabled)
+{
+    if (highMotion_ == enabled) {
+        return;
+    }
+
+    highMotion_ = enabled;
+    qInfo() << "high motion:" << enabled;
+    emit highMotionChanged();
 }
 
 int BackendBridge::rosterCount() const

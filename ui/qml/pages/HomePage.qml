@@ -11,8 +11,6 @@ Item {
 
     state: "idle"
 
-    Component.onCompleted: backendBridge.mockImportCsv()
-
     states: [
         State {
             name: "idle"

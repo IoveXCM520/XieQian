@@ -51,7 +51,7 @@ Item {
                 implicitHeight: 40
                 text: "导入 CSV 名单"
 
-                onClicked: backendBridge.mockImportCsv()
+                onClicked: backendBridge.openCsvFileDialog()
 
                 background: Rectangle {
                     radius: 2

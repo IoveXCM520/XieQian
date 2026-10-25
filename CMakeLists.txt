@@ -22,13 +22,13 @@ add_library(xieqian_core STATIC ${CORE_SOURCES})
 target_include_directories(xieqian_core PUBLIC include)
 
 # 查找 Qt6
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Widgets)
 qt_standard_project_setup()
 
 # UI 应用可执行文件
 file(GLOB_RECURSE UI_SOURCES "src/ui/*.cpp" "src/ui/*.h")
 add_executable(XieQian WIN32 ${UI_SOURCES} ui/qml.qrc)
-target_link_libraries(XieQian PRIVATE xieqian_core Qt6::Quick Qt6::QuickControls2)
+target_link_libraries(XieQian PRIVATE xieqian_core Qt6::Quick Qt6::QuickControls2 Qt6::Widgets)
 
 # 测试可执行文件 (使用系统安装的 Catch2)
 find_package(Catch2 3 REQUIRED)

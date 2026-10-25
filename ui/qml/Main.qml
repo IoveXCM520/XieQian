@@ -49,7 +49,9 @@ ApplicationWindow {
                     model: [
                         { symbol: "抽", name: "抽奖" },
                         { symbol: "名", name: "名单" },
-                        { symbol: "史", name: "历史" }
+                        { symbol: "史", name: "历史" },
+                        { symbol: "设", name: "设置" },
+                        { symbol: "关", name: "关于" }
                     ]
 
                     delegate: Rectangle {
@@ -109,6 +111,10 @@ ApplicationWindow {
             RosterPage {}
 
             HistoryPage {}
+
+            SettingsPage {}
+
+            AboutPage {}
         }
     }
 }
