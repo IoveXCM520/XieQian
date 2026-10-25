@@ -8,12 +8,15 @@ namespace xieqian::core {
 
 struct Participant {
     std::string name;
+    std::string studentId;
+    std::string group;
     bool enabled = true;
 };
 
 class Roster
 {
 public:
+    void add(Participant participant);
     void add(std::string name, bool enabled = true);
     void clear();
 

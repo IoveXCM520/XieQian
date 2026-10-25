@@ -5,9 +5,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# MSVC 默认把 __cplusplus 固定在 199711L，C++20 特性检测需要该开关
+# MSVC 默认把 __cplusplus 固定在 199711L，C++20 特性检测需要该开关；
+# 源码与执行字符集统一为 UTF-8，避免中文字面量在 Windows 上变成乱码
 if(MSVC)
-    add_compile_options(/Zc:__cplusplus)
+    add_compile_options(/Zc:__cplusplus /utf-8)
 endif()
 
 # 开启 Qt 的自动处理（MOC, UIC, RCC）

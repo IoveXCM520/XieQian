@@ -11,6 +11,8 @@ Item {
     // 旋转角度由外部动画驱动，指针与外环保持静止
     property real angle: 0
 
+    property bool showPointer: true
+
     implicitWidth: 420
     implicitHeight: 420
 
@@ -103,6 +105,7 @@ Item {
         width: 16
         height: 16
         rotation: 45
+        visible: wheelRoot.showPointer
         color: wheelRoot.goldColor
     }
 }

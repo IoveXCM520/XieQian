@@ -6,9 +6,17 @@
 
 namespace xieqian::core {
 
+void Roster::add(Participant participant)
+{
+    participants_.push_back(std::move(participant));
+}
+
 void Roster::add(std::string name, bool enabled)
 {
-    participants_.push_back(Participant{std::move(name), enabled});
+    Participant participant;
+    participant.name = std::move(name);
+    participant.enabled = enabled;
+    participants_.push_back(std::move(participant));
 }
 
 void Roster::clear()

@@ -11,6 +11,8 @@ Item {
 
     state: "idle"
 
+    Component.onCompleted: backendBridge.mockImportCsv()
+
     states: [
         State {
             name: "idle"
@@ -78,7 +80,7 @@ Item {
     ]
 
     function startDraw() {
-        if (page.state !== "idle")
+        if (page.state !== "idle" || backendBridge.rosterCount === 0)
             return;
 
         page.state = "spinning";
@@ -174,6 +176,7 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: 420
             Layout.preferredHeight: 420
+            showPointer: backendBridge.rosterCount > 0
         }
 
         Text {
@@ -194,7 +197,8 @@ Item {
             implicitWidth: 220
             implicitHeight: 60
             hoverEnabled: true
-            text: "抽 取"
+            enabled: backendBridge.rosterCount > 0
+            text: backendBridge.rosterCount > 0 ? "抽 取" : "暂无数据"
 
             onClicked: page.startDraw()
 
