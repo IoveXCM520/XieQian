@@ -7,7 +7,7 @@ import "../components"
 Item {
     id: page
 
-    property string winnerName: ""
+    property var winnerNames: []
 
     state: "idle"
 
@@ -82,6 +82,8 @@ Item {
             return;
 
         page.state = "spinning";
+        flipCard.cardCount = Math.max(6, backendBridge.drawCount);
+        blindBox.boxCount = Math.max(3, backendBridge.drawCount);
 
         switch (backendBridge.currentDrawMode) {
         case 0:
@@ -99,18 +101,21 @@ Item {
     }
 
     function drawAndReveal() {
-        backendBridge.drawWinner();
+        if (backendBridge.drawCount > 1)
+            backendBridge.drawMultipleWinners();
+        else
+            backendBridge.drawWinner();
     }
 
-    function revealWinner(name, mode) {
-        page.winnerName = name;
+    function revealWinners(names, mode) {
+        page.winnerNames = names;
 
         switch (mode) {
         case 1:
-            flipCard.reveal(name);
+            flipCard.reveal(names);
             break;
         case 2:
-            blindBox.reveal(name);
+            blindBox.reveal(names);
             break;
         default:
             page.showResult();
@@ -131,7 +136,11 @@ Item {
         target: backendBridge
 
         function onWinnerDrawn(name, mode) {
-            page.revealWinner(name, mode);
+            page.revealWinners([name], mode);
+        }
+
+        function onWinnersDrawn(names, mode) {
+            page.revealWinners(names, mode);
         }
     }
 
@@ -171,7 +180,7 @@ Item {
 
         onStopped: {
             page.state = "idle";
-            page.winnerName = "";
+            page.winnerNames = [];
             flipCard.reset();
             blindBox.reset();
         }
@@ -368,14 +377,94 @@ Item {
         }
     }
 
+    Item {
+        id: settingsButton
+
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: 24
+        anchors.rightMargin: 28
+        width: 40
+        height: 40
+
+        Rectangle {
+            anchors.fill: parent
+            radius: width / 2
+            color: "transparent"
+            border.width: 1
+            border.color: settingsArea.containsMouse ? "#D4AF37" : "transparent"
+
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 160
+                }
+            }
+        }
+
+        Item {
+            id: gearIcon
+
+            anchors.centerIn: parent
+            width: 20
+            height: 20
+
+            Repeater {
+                model: 8
+
+                delegate: Rectangle {
+                    width: 3
+                    height: gearIcon.height
+                    x: (gearIcon.width - width) / 2
+                    y: 0
+                    radius: 1
+                    color: settingsArea.containsMouse ? "#2D3E50" : "#6B7A88"
+                    rotation: index * 45
+                    transformOrigin: Item.Center
+                }
+            }
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: 15
+                height: 15
+                radius: width / 2
+                color: "#F8F6F0"
+                border.width: 2
+                border.color: settingsArea.containsMouse ? "#2D3E50" : "#6B7A88"
+                Behavior on border.color {
+                    ColorAnimation {
+                        duration: 160
+                    }
+                }
+            }
+        }
+
+        MouseArea {
+            id: settingsArea
+
+            anchors.fill: parent
+            hoverEnabled: true
+            enabled: page.state === "idle"
+            cursorShape: Qt.PointingHandCursor
+
+            onClicked: drawSettings.open()
+        }
+    }
+
     ResultCard {
         id: resultCard
 
         anchors.fill: parent
         opacity: 0
         visible: opacity > 0.001
-        winnerName: page.winnerName
+        winnerNames: page.winnerNames
 
         onContinueRequested: page.closeResult()
+    }
+
+    DrawSettingsDialog {
+        id: drawSettings
+
+        anchors.fill: parent
     }
 }

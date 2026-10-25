@@ -11,6 +11,7 @@ struct Participant {
     std::string studentId;
     std::string group;
     bool enabled = true;
+    double weight = 1.0;
 };
 
 class Roster

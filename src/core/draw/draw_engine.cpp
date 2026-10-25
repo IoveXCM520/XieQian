@@ -9,30 +9,120 @@ DrawEngine::DrawEngine(std::mt19937_64 rng) : rng_(std::move(rng)) {}
 
 std::optional<std::string> DrawEngine::drawOne(const Roster &roster)
 {
-    const std::vector<Participant> candidates = roster.enabledParticipants();
-    if (candidates.empty()) {
+    const std::vector<Participant> winners = draw(roster.enabledParticipants(), 1, DrawStrategy::Random);
+    if (winners.empty()) {
         return std::nullopt;
     }
-
-    std::uniform_int_distribution<std::size_t> pick(0, candidates.size() - 1);
-    return candidates[pick(rng_)].name;
+    return winners.front().name;
 }
 
 std::vector<std::string> DrawEngine::drawMultiple(const Roster &roster, std::size_t count)
 {
-    std::vector<Participant> candidates = roster.enabledParticipants();
-    std::shuffle(candidates.begin(), candidates.end(), rng_);
-
-    if (count < candidates.size()) {
-        candidates.resize(count);
-    }
-
     std::vector<std::string> winners;
-    winners.reserve(candidates.size());
-    for (const Participant &participant : candidates) {
+    const std::vector<Participant> picked =
+        draw(roster.enabledParticipants(), static_cast<int>(count), DrawStrategy::Random);
+    winners.reserve(picked.size());
+    for (const Participant &participant : picked) {
         winners.push_back(participant.name);
     }
     return winners;
+}
+
+std::vector<Participant> DrawEngine::draw(const std::vector<Participant> &pool, int count, DrawStrategy strategy)
+{
+    std::vector<Participant> winners;
+    if (count <= 0 || pool.empty()) {
+        return winners;
+    }
+
+    const auto wanted = std::min(static_cast<std::size_t>(count), pool.size());
+    if (strategy == DrawStrategy::Weighted) {
+        return drawWeighted(pool, wanted);
+    }
+
+    std::vector<Participant> unseen;
+    std::vector<Participant> seen;
+    if (strategy == DrawStrategy::NoRepeat) {
+        for (const Participant &participant : pool) {
+            const auto id = participantId(participant);
+            const bool drawn = std::find(drawnIds_.begin(), drawnIds_.end(), id) != drawnIds_.end();
+            (drawn ? seen : unseen).push_back(participant);
+        }
+    } else {
+        unseen = pool;
+    }
+
+    std::shuffle(unseen.begin(), unseen.end(), rng_);
+    std::shuffle(seen.begin(), seen.end(), rng_);
+
+    winners.reserve(wanted);
+    for (const Participant &participant : unseen) {
+        if (winners.size() == wanted) {
+            break;
+        }
+        winners.push_back(participant);
+    }
+    for (const Participant &participant : seen) {
+        if (winners.size() == wanted) {
+            break;
+        }
+        winners.push_back(participant);
+    }
+
+    if (strategy == DrawStrategy::NoRepeat) {
+        for (const Participant &winner : winners) {
+            const auto id = participantId(winner);
+            if (std::find(drawnIds_.begin(), drawnIds_.end(), id) == drawnIds_.end()) {
+                drawnIds_.push_back(id);
+            }
+        }
+    }
+    return winners;
+}
+
+void DrawEngine::clearDrawnHistory()
+{
+    drawnIds_.clear();
+}
+
+std::vector<Participant> DrawEngine::drawWeighted(const std::vector<Participant> &pool, std::size_t count)
+{
+    std::vector<Participant> remaining = pool;
+    std::vector<Participant> winners;
+    winners.reserve(count);
+
+    std::uniform_real_distribution<double> unit(0.0, 1.0);
+    while (winners.size() < count && !remaining.empty()) {
+        double totalWeight = 0.0;
+        for (const Participant &participant : remaining) {
+            totalWeight += std::max(0.0, participant.weight);
+        }
+
+        std::size_t picked = remaining.size() - 1;
+        if (totalWeight <= 0.0) {
+            std::uniform_int_distribution<std::size_t> uniform(0, remaining.size() - 1);
+            picked = uniform(rng_);
+        } else {
+            double cursor = unit(rng_) * totalWeight;
+            for (std::size_t index = 0; index < remaining.size(); ++index) {
+                const double weight = std::max(0.0, remaining[index].weight);
+                if (cursor < weight) {
+                    picked = index;
+                    break;
+                }
+                cursor -= weight;
+            }
+        }
+
+        winners.push_back(remaining[picked]);
+        remaining.erase(remaining.begin() + static_cast<std::ptrdiff_t>(picked));
+    }
+    return winners;
+}
+
+std::string DrawEngine::participantId(const Participant &participant)
+{
+    return participant.studentId.empty() ? participant.name : participant.studentId;
 }
 
 }  // namespace xieqian::core

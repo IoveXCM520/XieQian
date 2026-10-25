@@ -4,7 +4,10 @@ import QtQuick.Controls
 Item {
     id: cardRoot
 
-    property string winnerName: ""
+    property var winnerNames: []
+    readonly property bool multi: winnerNames.length > 1
+    readonly property int columns: winnerNames.length <= 4 ? 2 : 3
+    readonly property int rows: multi ? Math.ceil(winnerNames.length / columns) : 1
 
     signal continueRequested()
 
@@ -68,46 +71,77 @@ Item {
         id: card
 
         anchors.centerIn: parent
-        width: Math.min(520, cardRoot.width - 80)
-        height: 340
+        width: cardRoot.multi ? Math.min(760, cardRoot.width - 80) : Math.min(520, cardRoot.width - 80)
+        height: cardRoot.multi ? Math.max(300, 170 + cardRoot.rows * 56) : 340
         radius: 2
         color: "#FBF9F4"
         border.width: 1
         border.color: "#D4AF37"
 
-        Column {
-            anchors.centerIn: parent
-            spacing: 18
+        Text {
+            id: titleText
 
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: "恭 喜 中 签"
-                color: "#D4AF37"
-                font.pixelSize: 16
-                font.letterSpacing: 6
-            }
+            anchors.top: parent.top
+            anchors.topMargin: 28
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: cardRoot.multi ? "共 " + cardRoot.winnerNames.length + " 位 中 签" : "恭 喜 中 签"
+            color: "#D4AF37"
+            font.pixelSize: 16
+            font.letterSpacing: 6
+        }
 
-            Rectangle {
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: 150
-                height: 1
-                color: "#E3D3A3"
-            }
+        Rectangle {
+            id: divider
 
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: cardRoot.winnerName
-                color: "#2D3E50"
-                font.pixelSize: 56
-                font.letterSpacing: 8
-            }
+            anchors.top: titleText.bottom
+            anchors.topMargin: 12
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 150
+            height: 1
+            color: "#E3D3A3"
+        }
 
-            Rectangle {
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: 60
-                height: 1
-                color: "#3F5A4E"
-                opacity: 0.5
+        Text {
+            anchors.top: divider.bottom
+            anchors.topMargin: 28
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: !cardRoot.multi
+            text: cardRoot.winnerNames.length > 0 ? cardRoot.winnerNames[0] : ""
+            color: "#2D3E50"
+            font.pixelSize: 56
+            font.letterSpacing: 8
+        }
+
+        Grid {
+            anchors.top: divider.bottom
+            anchors.topMargin: 20
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: cardRoot.multi
+            columns: cardRoot.columns
+            spacing: 12
+
+            Repeater {
+                model: cardRoot.winnerNames.length
+
+                delegate: Rectangle {
+                    width: 150
+                    height: 44
+                    radius: 2
+                    color: "#F8F6F0"
+                    border.width: 1
+                    border.color: "#E1D8C6"
+
+                    Text {
+                        anchors.centerIn: parent
+                        width: parent.width - 16
+                        text: cardRoot.winnerNames[index]
+                        color: "#2D3E50"
+                        font.pixelSize: 22
+                        font.letterSpacing: 2
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                    }
+                }
             }
         }
 

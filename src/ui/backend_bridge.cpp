@@ -1,5 +1,6 @@
 #include "backend_bridge.h"
 
+#include <algorithm>
 #include <random>
 #include <string>
 
@@ -14,6 +15,9 @@
 #include "xieqian/core/io/csv_parser.h"
 
 namespace {
+
+constexpr int kMinDrawCount = 1;
+constexpr int kMaxDrawCount = 10;
 
 std::mt19937_64 seededGenerator()
 {
@@ -48,12 +52,13 @@ BackendBridge::BackendBridge(QObject *parent)
 
 QString BackendBridge::drawWinner()
 {
-    const auto winner = drawEngine_->drawOne(*roster_);
-    if (!winner.has_value()) {
+    const std::vector<xieqian::core::Participant> winners =
+        drawEngine_->draw(roster_->enabledParticipants(), 1, drawStrategy_);
+    if (winners.empty()) {
         return QStringLiteral("无可用名单");
     }
 
-    const QString name = QString::fromStdString(*winner);
+    const QString name = QString::fromStdString(winners.front().name);
     recordDraw(name);
     emit winnerDrawn(name, static_cast<int>(currentDrawMode_));
     return name;
@@ -66,12 +71,51 @@ QVariantList BackendBridge::drawWinners(int count)
         return winners;
     }
 
-    for (const std::string &name : drawEngine_->drawMultiple(*roster_, static_cast<std::size_t>(count))) {
-        const QString winner = QString::fromStdString(name);
+    for (const xieqian::core::Participant &participant :
+         drawEngine_->draw(roster_->enabledParticipants(), count, drawStrategy_)) {
+        const QString winner = QString::fromStdString(participant.name);
         recordDraw(winner);
         winners.append(winner);
     }
     return winners;
+}
+
+QVariantList BackendBridge::drawMultipleWinners()
+{
+    QVariantList winners;
+    QStringList names;
+
+    for (const xieqian::core::Participant &participant :
+         drawEngine_->draw(roster_->enabledParticipants(), drawCount_, drawStrategy_)) {
+        const QString name = QString::fromStdString(participant.name);
+        recordDraw(name);
+        names.append(name);
+        winners.append(name);
+    }
+
+    if (!names.isEmpty()) {
+        emit winnersDrawn(names, static_cast<int>(currentDrawMode_));
+    }
+    return winners;
+}
+
+void BackendBridge::updateDrawSettings(int count, int strategy)
+{
+    if (strategy < static_cast<int>(xieqian::core::DrawStrategy::Random) ||
+        strategy > static_cast<int>(xieqian::core::DrawStrategy::Weighted)) {
+        return;
+    }
+
+    const int nextCount = std::clamp(count, kMinDrawCount, kMaxDrawCount);
+    const auto nextStrategy = static_cast<xieqian::core::DrawStrategy>(strategy);
+
+    if (drawCount_ == nextCount && drawStrategy_ == nextStrategy) {
+        return;
+    }
+
+    drawCount_ = nextCount;
+    drawStrategy_ = nextStrategy;
+    emit drawSettingsChanged();
 }
 
 bool BackendBridge::loadRosterFromCsv(const QString &filePath)
@@ -154,6 +198,7 @@ void BackendBridge::clearAllData()
 {
     roster_->clear();
     history_.clear();
+    drawEngine_->clearDrawnHistory();
 
     emit rosterUpdated();
     emit historyUpdated();
@@ -162,6 +207,15 @@ void BackendBridge::clearAllData()
 int BackendBridge::currentDrawMode() const
 {
     return static_cast<int>(currentDrawMode_);
+}
+int BackendBridge::drawCount() const
+{
+    return drawCount_;
+}
+
+int BackendBridge::drawStrategy() const
+{
+    return static_cast<int>(drawStrategy_);
 }
 
 void BackendBridge::setCurrentDrawMode(int mode)
