@@ -89,7 +89,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/XieQian-Setup-1.0.0.exe
+            artifacts/XieQian-Setup-*.exe
             artifacts/XieQian-Windows.zip
           draft: false
           prerelease: false
