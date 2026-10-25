@@ -38,8 +38,15 @@ jobs:
       working-directory: build
       run: ctest -C Release --output-on-failure
 
+    - name: Deploy Qt Runtime
+      shell: cmd
+      run: |
+        mkdir deploy
+        copy build\XieQian.exe deploy\
+        windeployqt deploy\XieQian.exe --release --qmldir ui\qml --no-translations --no-system-d3d-compiler
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: XieQian-Windows
-        path: build/XieQian.exe
+        path: deploy/

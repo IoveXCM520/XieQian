@@ -34,7 +34,7 @@ Item {
             hoverEnabled: true
 
             onClicked: {
-                page.drawResult = backendBridge.testDraw()
+                page.drawResult = backendBridge.drawWinner()
                 resultDialog.open()
             }
 
