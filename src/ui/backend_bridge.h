@@ -8,6 +8,7 @@
 #include <QStringList>
 #include <QVariantList>
 
+#include "ai_manager.h"
 #include "xieqian/core/draw/draw_engine.h"
 #include "xieqian/core/roster/roster.h"
 
@@ -22,6 +23,7 @@ class BackendBridge : public QObject
     Q_PROPERTY(int drawStrategy READ drawStrategy NOTIFY drawSettingsChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundEnabledChanged)
     Q_PROPERTY(bool motionEnabled READ motionEnabled WRITE setMotionEnabled NOTIFY motionEnabledChanged)
+    Q_PROPERTY(AiManager *aiManager READ aiManager CONSTANT)
 
 public:
     enum class DrawMode { Wheel = 0, FlipCard = 1, BlindBox = 2 };
@@ -33,6 +35,7 @@ public:
     Q_INVOKABLE QVariantList drawMultipleWinners();
     Q_INVOKABLE QVariantList generateGroups(int groupCount);
     Q_INVOKABLE QVariantList generateSeats();
+    Q_INVOKABLE void applyMockRoster(const QVariantList &roster);
     Q_INVOKABLE void updateDrawSettings(int count, int strategy);
     Q_INVOKABLE bool loadRosterFromCsv(const QString &filePath);
     Q_INVOKABLE void openCsvFileDialog();
@@ -62,6 +65,8 @@ public:
     bool motionEnabled() const;
     void setMotionEnabled(bool enabled);
 
+    AiManager *aiManager() const;
+
 signals:
     void rosterUpdated();
     void historyUpdated();
@@ -87,6 +92,7 @@ private:
 
     std::unique_ptr<xieqian::core::Roster> roster_;
     std::unique_ptr<xieqian::core::DrawEngine> drawEngine_;
+    std::unique_ptr<AiManager> aiManager_;
     std::vector<HistoryEntry> history_;
     DrawMode currentDrawMode_ = DrawMode::Wheel;
     int drawCount_ = 1;

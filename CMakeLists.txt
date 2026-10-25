@@ -11,6 +11,9 @@ if(MSVC)
     add_compile_options(/Zc:__cplusplus /utf-8)
 endif()
 
+# DeepSeek API Key 在配置阶段注入；未注入时为空字符串，AI 功能会提示未配置
+add_compile_definitions(DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY}")
+
 # 开启 Qt 的自动处理（MOC, UIC, RCC）
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -22,13 +25,13 @@ add_library(xieqian_core STATIC ${CORE_SOURCES})
 target_include_directories(xieqian_core PUBLIC include)
 
 # 查找 Qt6
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Widgets Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Widgets Multimedia Network)
 qt_standard_project_setup()
 
 # UI 应用可执行文件
 file(GLOB_RECURSE UI_SOURCES "src/ui/*.cpp" "src/ui/*.h")
 add_executable(XieQian WIN32 ${UI_SOURCES} ui/qml.qrc)
-target_link_libraries(XieQian PRIVATE xieqian_core Qt6::Quick Qt6::QuickControls2 Qt6::Widgets Qt6::Multimedia)
+target_link_libraries(XieQian PRIVATE xieqian_core Qt6::Quick Qt6::QuickControls2 Qt6::Widgets Qt6::Multimedia Qt6::Network)
 
 # 程序图标：rc 由 MSVC 资源编译器处理，仅 Windows 平台需要
 if(WIN32)

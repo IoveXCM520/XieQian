@@ -11,11 +11,63 @@ Item {
     readonly property int columns: winnerNames.length <= 4 ? 2 : 3
     readonly property int rows: multi ? Math.ceil(winnerNames.length / columns) : 1
 
+    property bool aiBusy: false
+    property string aiSpeech: ""
+    property string aiError: ""
+    property real speechOpacity: 0
+    readonly property string awardWinnerName: winnerNames.length > 0 ? winnerNames[0] : ""
+
     signal continueRequested()
 
+    function requestAiSpeech() {
+        if (cardRoot.aiBusy || cardRoot.awardWinnerName.length === 0)
+            return;
+
+        cardRoot.aiBusy = true;
+        cardRoot.aiError = "";
+        backendBridge.aiManager.generateAwardSpeech(cardRoot.awardWinnerName);
+    }
+
     onVisibleChanged: {
-        if (cardRoot.visible && Window.window)
-            Window.window.playWin();
+        if (cardRoot.visible) {
+            if (Window.window)
+                Window.window.playWin();
+        } else {
+            cardRoot.aiBusy = false;
+            cardRoot.aiSpeech = "";
+            cardRoot.aiError = "";
+            cardRoot.speechOpacity = 0;
+        }
+    }
+
+    Connections {
+        target: backendBridge.aiManager
+
+        function onAwardSpeechReady(speech) {
+            if (!cardRoot.visible)
+                return;
+            cardRoot.aiBusy = false;
+            cardRoot.aiSpeech = speech;
+            speechFadeIn.start();
+        }
+
+        function onAwardSpeechFailed(message) {
+            if (!cardRoot.visible)
+                return;
+            cardRoot.aiBusy = false;
+            cardRoot.aiError = message;
+        }
+    }
+
+    NumberAnimation {
+        id: speechFadeIn
+
+        target: cardRoot
+        property: "speechOpacity"
+        from: 0
+        to: 1
+        duration: 420
+        easing.type: Easing.OutCubic
     }
 
     Rectangle {
@@ -105,6 +157,8 @@ Item {
         }
 
         Text {
+            id: winnerNameText
+
             anchors.top: divider.bottom
             anchors.topMargin: 28
             anchors.horizontalCenter: parent.horizontalCenter
@@ -113,6 +167,64 @@ Item {
             color: "#2D3E50"
             font.pixelSize: 56
             font.letterSpacing: 8
+        }
+
+        Button {
+            id: aiButton
+
+            anchors.top: winnerNameText.bottom
+            anchors.topMargin: 12
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 170
+            height: 32
+            visible: !cardRoot.multi && cardRoot.aiSpeech.length === 0
+            enabled: !cardRoot.aiBusy
+            text: cardRoot.aiBusy ? "思考中..." : "✨ 获取 AI 点评"
+
+            onClicked: cardRoot.requestAiSpeech()
+
+            background: Rectangle {
+                radius: 2
+                color: aiButton.hovered && aiButton.enabled ? "#F3E9D2" : "transparent"
+                border.width: 1
+                border.color: aiButton.enabled ? "#D4AF37" : "#C9C2B2"
+            }
+
+            contentItem: Text {
+                text: aiButton.text
+                color: aiButton.enabled ? "#8C6B1F" : "#A4A094"
+                font.pixelSize: 13
+                font.letterSpacing: 1
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
+
+        Text {
+            id: speechText
+
+            anchors.top: aiButton.bottom
+            anchors.topMargin: 8
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: parent.width - 80
+            text: cardRoot.aiSpeech
+            visible: cardRoot.speechOpacity > 0.001
+            opacity: cardRoot.speechOpacity
+            color: "#3F5A4E"
+            font.pixelSize: 14
+            lineHeight: 1.25
+            wrapMode: Text.Wrap
+            horizontalAlignment: Text.AlignHCenter
+        }
+
+        Text {
+            anchors.top: aiButton.bottom
+            anchors.topMargin: 8
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: cardRoot.aiError.length > 0 && !cardRoot.multi
+            text: cardRoot.aiError
+            color: "#B4543F"
+            font.pixelSize: 12
         }
 
         Grid {

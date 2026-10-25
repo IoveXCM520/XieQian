@@ -6,6 +6,8 @@ Item {
     id: page
 
     property var participants: []
+    property bool aiBusy: false
+    property string aiMessage: ""
 
     function refresh() {
         participants = backendBridge.getParticipantsWithStatus();
@@ -13,6 +15,15 @@ Item {
 
     function weightLabel(value) {
         return "x" + Number(value).toFixed(1);
+    }
+
+    function startAiRoster() {
+        if (page.aiBusy)
+            return;
+
+        page.aiBusy = true;
+        page.aiMessage = "";
+        backendBridge.aiManager.generateMockRoster();
     }
 
     Component.onCompleted: refresh()
@@ -26,6 +37,20 @@ Item {
 
         function onHistoryUpdated() {
             page.refresh();
+        }
+    }
+
+    Connections {
+        target: backendBridge.aiManager
+
+        function onMockRosterReady(roster) {
+            page.aiBusy = false;
+            backendBridge.applyMockRoster(roster);
+        }
+
+        function onMockRosterFailed(message) {
+            page.aiBusy = false;
+            page.aiMessage = message;
         }
     }
 
@@ -80,6 +105,33 @@ Item {
             }
 
             Button {
+                id: aiButton
+
+                implicitWidth: 200
+                implicitHeight: 40
+                text: page.aiBusy ? "AI 正在思考中..." : "✨ AI 生成测试名单"
+                enabled: !page.aiBusy
+
+                onClicked: page.startAiRoster()
+
+                background: Rectangle {
+                    radius: 2
+                    color: aiButton.hovered && aiButton.enabled ? "#F3E9D2" : "transparent"
+                    border.width: 1
+                    border.color: aiButton.enabled ? "#D4AF37" : "#C9C2B2"
+                }
+
+                contentItem: Text {
+                    text: aiButton.text
+                    color: aiButton.enabled ? "#8C6B1F" : "#A4B0BE"
+                    font.pixelSize: 14
+                    font.letterSpacing: 1
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+
+            Button {
                 id: importButton
 
                 implicitWidth: 150
@@ -104,6 +156,14 @@ Item {
                     verticalAlignment: Text.AlignVCenter
                 }
             }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            visible: page.aiMessage.length > 0
+            text: page.aiMessage
+            color: "#B4543F"
+            font.pixelSize: 13
         }
 
         Rectangle {

@@ -73,7 +73,8 @@ QString mockCsvContent()
 BackendBridge::BackendBridge(QObject *parent)
     : QObject(parent),
       roster_(std::make_unique<xieqian::core::Roster>()),
-      drawEngine_(std::make_unique<xieqian::core::DrawEngine>(seededGenerator()))
+      drawEngine_(std::make_unique<xieqian::core::DrawEngine>(seededGenerator())),
+      aiManager_(std::make_unique<AiManager>())
 {
     loadState();
 }
@@ -190,6 +191,31 @@ QVariantList BackendBridge::generateSeats()
         seats.append(QString::fromStdString(participant.name));
     }
     return seats;
+}
+
+void BackendBridge::applyMockRoster(const QVariantList &roster)
+{
+    if (roster.isEmpty()) {
+        return;
+    }
+
+    roster_->clear();
+    for (const QVariant &value : roster) {
+        const QVariantMap entry = value.toMap();
+        const QString name = entry.value(QStringLiteral("name")).toString().trimmed();
+        if (name.isEmpty()) {
+            continue;
+        }
+
+        xieqian::core::Participant participant;
+        participant.name = name.toStdString();
+        participant.studentId = entry.value(QStringLiteral("id")).toString().trimmed().toStdString();
+        roster_->add(std::move(participant));
+    }
+
+    drawEngine_->clearDrawnHistory();
+    saveState();
+    emit rosterUpdated();
 }
 
 void BackendBridge::updateDrawSettings(int count, int strategy)
@@ -378,6 +404,11 @@ void BackendBridge::setSoundEnabled(bool enabled)
 bool BackendBridge::motionEnabled() const
 {
     return motionEnabled_;
+}
+
+AiManager *BackendBridge::aiManager() const
+{
+    return aiManager_.get();
 }
 
 void BackendBridge::setMotionEnabled(bool enabled)

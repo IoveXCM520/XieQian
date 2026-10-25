@@ -30,7 +30,7 @@ jobs:
         cmake --install "$env:RUNNER_TEMP/Catch2-build" --config Release --prefix "$env:RUNNER_TEMP/Catch2-install"
 
     - name: Configure CMake
-      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCatch2_DIR="$env:RUNNER_TEMP/Catch2-install/lib/cmake/Catch2"
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCatch2_DIR="$env:RUNNER_TEMP/Catch2-install/lib/cmake/Catch2" -DDEEPSEEK_API_KEY="${{ secrets.DEEPSEEK_API_KEY }}"
 
     - name: Build Core and App
       run: cmake --build build --config Release
