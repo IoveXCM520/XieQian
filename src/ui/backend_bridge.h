@@ -14,10 +14,13 @@ class BackendBridge : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(int rosterCount READ rosterCount NOTIFY rosterUpdated)
+    Q_PROPERTY(int currentDrawMode READ currentDrawMode WRITE setCurrentDrawMode NOTIFY drawModeChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundEnabledChanged)
     Q_PROPERTY(bool highMotion READ highMotion WRITE setHighMotion NOTIFY highMotionChanged)
 
 public:
+    enum class DrawMode { Wheel = 0, FlipCard = 1, BlindBox = 2 };
+
     explicit BackendBridge(QObject *parent = nullptr);
 
     Q_INVOKABLE QString drawWinner();
@@ -32,6 +35,9 @@ public:
 
     int rosterCount() const;
 
+    int currentDrawMode() const;
+    void setCurrentDrawMode(int mode);
+
     bool soundEnabled() const;
     void setSoundEnabled(bool enabled);
 
@@ -41,6 +47,8 @@ public:
 signals:
     void rosterUpdated();
     void historyUpdated();
+    void drawModeChanged();
+    void winnerDrawn(const QString &name, int mode);
     void soundEnabledChanged();
     void highMotionChanged();
 
@@ -55,6 +63,7 @@ private:
     std::unique_ptr<xieqian::core::Roster> roster_;
     std::unique_ptr<xieqian::core::DrawEngine> drawEngine_;
     std::vector<HistoryEntry> history_;
+    DrawMode currentDrawMode_ = DrawMode::Wheel;
     bool soundEnabled_ = true;
     bool highMotion_ = true;
 };

@@ -82,19 +82,57 @@ Item {
             return;
 
         page.state = "spinning";
-        spinAnimation.from = wheel.angle;
-        spinAnimation.to = wheel.angle + 1440;
-        spinAnimation.start();
+
+        switch (backendBridge.currentDrawMode) {
+        case 0:
+            spinAnimation.from = wheel.angle;
+            spinAnimation.to = wheel.angle + 1440;
+            spinAnimation.start();
+            break;
+        case 1:
+            flipCard.startAnimation();
+            break;
+        default:
+            blindBox.startAnimation();
+            break;
+        }
     }
 
-    function revealWinner() {
-        page.winnerName = backendBridge.drawWinner();
+    function drawAndReveal() {
+        backendBridge.drawWinner();
+    }
+
+    function revealWinner(name, mode) {
+        page.winnerName = name;
+
+        switch (mode) {
+        case 1:
+            flipCard.reveal(name);
+            break;
+        case 2:
+            blindBox.reveal(name);
+            break;
+        default:
+            page.showResult();
+            break;
+        }
+    }
+
+    function showResult() {
         page.state = "result";
         cardFadeIn.start();
     }
 
     function closeResult() {
         cardFadeOut.start();
+    }
+
+    Connections {
+        target: backendBridge
+
+        function onWinnerDrawn(name, mode) {
+            page.revealWinner(name, mode);
+        }
     }
 
     RotationAnimation {
@@ -108,7 +146,7 @@ Item {
 
         onStopped: {
             if (page.state === "spinning")
-                page.revealWinner();
+                page.drawAndReveal();
         }
     }
 
@@ -131,7 +169,12 @@ Item {
         duration: 260
         easing.type: Easing.InCubic
 
-        onStopped: page.state = "idle"
+        onStopped: {
+            page.state = "idle";
+            page.winnerName = "";
+            flipCard.reset();
+            blindBox.reset();
+        }
     }
 
     Rectangle {
@@ -166,15 +209,122 @@ Item {
 
     ColumnLayout {
         anchors.centerIn: parent
-        spacing: 32
+        spacing: 22
 
-        WheelItem {
-            id: wheel
+        Rectangle {
+            id: modeSwitcher
 
             Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: 420
-            Layout.preferredHeight: 420
-            showPointer: backendBridge.rosterCount > 0
+            implicitWidth: modeRow.implicitWidth + 10
+            implicitHeight: 44
+            radius: height / 2
+            color: "#EFEAE0"
+            border.width: 1
+            border.color: "#E1D8C6"
+
+            Row {
+                id: modeRow
+
+                anchors.centerIn: parent
+                spacing: 4
+
+                Repeater {
+                    model: ["大转盘", "翻牌抽签", "盲盒开箱"]
+
+                    delegate: Rectangle {
+                        id: modeTab
+
+                        width: modeLabel.implicitWidth + 36
+                        height: 36
+                        radius: height / 2
+                        color: backendBridge.currentDrawMode === index ? "#2D3E50" : "transparent"
+
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: 180
+                            }
+                        }
+
+                        Text {
+                            id: modeLabel
+
+                            anchors.centerIn: parent
+                            text: modelData
+                            color: backendBridge.currentDrawMode === index ? "#F8F6F0" : "#6B7A88"
+                            font.pixelSize: 14
+                            font.letterSpacing: 2
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: page.state === "idle"
+                            cursorShape: Qt.PointingHandCursor
+
+                            onClicked: backendBridge.currentDrawMode = index
+                        }
+                    }
+                }
+            }
+        }
+
+        Item {
+            id: visualHost
+
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: 680
+            Layout.preferredHeight: 430
+
+            WheelItem {
+                id: wheel
+
+                anchors.centerIn: parent
+                width: 400
+                height: 400
+                showPointer: backendBridge.rosterCount > 0
+                opacity: backendBridge.currentDrawMode === 0 ? 1 : 0
+                visible: opacity > 0.01
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 180
+                    }
+                }
+            }
+
+            FlipCardItem {
+                id: flipCard
+
+                anchors.centerIn: parent
+                showPointer: backendBridge.rosterCount > 0
+                opacity: backendBridge.currentDrawMode === 1 ? 1 : 0
+                visible: opacity > 0.01
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 180
+                    }
+                }
+
+                onShuffleFinished: page.drawAndReveal()
+                onRevealFinished: page.showResult()
+            }
+
+            BlindBoxItem {
+                id: blindBox
+
+                anchors.centerIn: parent
+                opacity: backendBridge.currentDrawMode === 2 ? 1 : 0
+                visible: opacity > 0.01
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 180
+                    }
+                }
+
+                onSelectRequested: page.drawAndReveal()
+                onRevealFinished: page.showResult()
+            }
         }
 
         Text {

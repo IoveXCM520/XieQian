@@ -55,6 +55,7 @@ QString BackendBridge::drawWinner()
 
     const QString name = QString::fromStdString(*winner);
     recordDraw(name);
+    emit winnerDrawn(name, static_cast<int>(currentDrawMode_));
     return name;
 }
 
@@ -156,6 +157,26 @@ void BackendBridge::clearAllData()
 
     emit rosterUpdated();
     emit historyUpdated();
+}
+
+int BackendBridge::currentDrawMode() const
+{
+    return static_cast<int>(currentDrawMode_);
+}
+
+void BackendBridge::setCurrentDrawMode(int mode)
+{
+    if (mode < static_cast<int>(DrawMode::Wheel) || mode > static_cast<int>(DrawMode::BlindBox)) {
+        return;
+    }
+
+    const auto next = static_cast<DrawMode>(mode);
+    if (currentDrawMode_ == next) {
+        return;
+    }
+
+    currentDrawMode_ = next;
+    emit drawModeChanged();
 }
 
 bool BackendBridge::soundEnabled() const
