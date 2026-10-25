@@ -16,6 +16,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryFile>
 #include <QVariantMap>
@@ -438,6 +439,16 @@ void BackendBridge::recordDraw(const QString &name)
 
 QString BackendBridge::dataFilePath()
 {
+    QSettings settings(QStringLiteral("HKEY_CURRENT_USER\\Software\\XieQian"), QSettings::NativeFormat);
+    const QString customPath = settings.value(QStringLiteral("DataPath")).toString().trimmed();
+
+    if (!customPath.isEmpty()) {
+        if (!QDir().mkpath(customPath)) {
+            qWarning() << "cannot create data directory:" << customPath;
+        }
+        return QDir(customPath).filePath(QStringLiteral("data.json"));
+    }
+
     return QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
         .filePath(QStringLiteral("data.json"));
 }
