@@ -11,6 +11,8 @@
 #include "xieqian/core/draw/draw_engine.h"
 #include "xieqian/core/roster/roster.h"
 
+class QJsonObject;
+
 class BackendBridge : public QObject
 {
     Q_OBJECT
@@ -19,7 +21,7 @@ class BackendBridge : public QObject
     Q_PROPERTY(int drawCount READ drawCount NOTIFY drawSettingsChanged)
     Q_PROPERTY(int drawStrategy READ drawStrategy NOTIFY drawSettingsChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundEnabledChanged)
-    Q_PROPERTY(bool highMotion READ highMotion WRITE setHighMotion NOTIFY highMotionChanged)
+    Q_PROPERTY(bool motionEnabled READ motionEnabled WRITE setMotionEnabled NOTIFY motionEnabledChanged)
 
 public:
     enum class DrawMode { Wheel = 0, FlipCard = 1, BlindBox = 2 };
@@ -39,6 +41,10 @@ public:
     Q_INVOKABLE void resetDrawnHistory();
     Q_INVOKABLE QVariantList getHistory();
     Q_INVOKABLE void clearAllData();
+    Q_INVOKABLE QString chooseBackupPath();
+    Q_INVOKABLE QString chooseRestorePath();
+    Q_INVOKABLE void exportData(const QString &filePath);
+    Q_INVOKABLE void importData(const QString &filePath);
 
     int rosterCount() const;
 
@@ -51,8 +57,8 @@ public:
     bool soundEnabled() const;
     void setSoundEnabled(bool enabled);
 
-    bool highMotion() const;
-    void setHighMotion(bool enabled);
+    bool motionEnabled() const;
+    void setMotionEnabled(bool enabled);
 
 signals:
     void rosterUpdated();
@@ -62,7 +68,7 @@ signals:
     void winnerDrawn(const QString &name, int mode);
     void winnersDrawn(const QStringList &names, int mode);
     void soundEnabledChanged();
-    void highMotionChanged();
+    void motionEnabledChanged();
 
 private:
     struct HistoryEntry {
@@ -71,6 +77,11 @@ private:
     };
 
     void recordDraw(const QString &name);
+    void applyData(const QJsonObject &root);
+    [[nodiscard]] QJsonObject stateToJson() const;
+    void saveState() const;
+    void loadState();
+    [[nodiscard]] static QString dataFilePath();
 
     std::unique_ptr<xieqian::core::Roster> roster_;
     std::unique_ptr<xieqian::core::DrawEngine> drawEngine_;
@@ -79,5 +90,5 @@ private:
     int drawCount_ = 1;
     xieqian::core::DrawStrategy drawStrategy_ = xieqian::core::DrawStrategy::Random;
     bool soundEnabled_ = true;
-    bool highMotion_ = true;
+    bool motionEnabled_ = true;
 };

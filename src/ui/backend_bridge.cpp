@@ -4,12 +4,19 @@
 #include <cmath>
 #include <random>
 #include <string>
+#include <utility>
 
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
+#include <QStandardPaths>
 #include <QTemporaryFile>
 #include <QVariantMap>
 
@@ -25,6 +32,25 @@ std::mt19937_64 seededGenerator()
     std::random_device device;
     std::seed_seq seed{device(), device(), device(), device()};
     return std::mt19937_64(seed);
+}
+
+bool hasStateArrays(const QJsonObject &root)
+{
+    return root.value(QStringLiteral("roster")).isArray() &&
+           root.value(QStringLiteral("history")).isArray();
+}
+
+bool writeJsonFile(const QString &path, const QJsonObject &state)
+{
+    QDir().mkpath(QFileInfo(path).absolutePath());
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning() << "cannot write JSON file:" << path;
+        return false;
+    }
+
+    return file.write(QJsonDocument(state).toJson(QJsonDocument::Indented)) >= 0;
 }
 
 QString mockCsvContent()
@@ -49,6 +75,44 @@ BackendBridge::BackendBridge(QObject *parent)
       roster_(std::make_unique<xieqian::core::Roster>()),
       drawEngine_(std::make_unique<xieqian::core::DrawEngine>(seededGenerator()))
 {
+    loadState();
+}
+
+void BackendBridge::loadState()
+{
+    const QString path = dataFilePath();
+    QFile file(path);
+    if (!file.exists()) {
+        return;
+    }
+
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "cannot read state file:" << path;
+        return;
+    }
+
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    file.close();
+
+    if (document.isNull() || !document.isObject() || !hasStateArrays(document.object())) {
+        qWarning() << "state file is corrupted or malformed:" << path;
+
+        const QString backupPath =
+            QFileInfo(path).absoluteDir().filePath(QStringLiteral("data_corrupted.json"));
+        if (QFile::exists(backupPath) && !QFile::remove(backupPath)) {
+            qWarning() << "cannot replace previous corrupted backup:" << backupPath;
+            return;
+        }
+        if (!QFile::rename(path, backupPath)) {
+            qWarning() << "cannot back up corrupted state file to:" << backupPath;
+            return;
+        }
+
+        qWarning() << "corrupted state file backed up to:" << backupPath;
+        return;
+    }
+
+    applyData(document.object());
 }
 
 QString BackendBridge::drawWinner()
@@ -127,6 +191,7 @@ bool BackendBridge::loadRosterFromCsv(const QString &filePath)
     }
 
     drawEngine_->clearDrawnHistory();
+    saveState();
     emit rosterUpdated();
     return true;
 }
@@ -185,6 +250,7 @@ void BackendBridge::toggleParticipantStatus(int index)
 
     const auto position = static_cast<std::size_t>(index);
     roster_->setEnabled(position, !roster_->at(position).enabled);
+    saveState();
     emit rosterUpdated();
 }
 
@@ -198,6 +264,7 @@ void BackendBridge::updateParticipantWeight(const QString &id, double weight)
     for (std::size_t index = 0; index < roster_->size(); ++index) {
         if (xieqian::core::participantId(roster_->at(index)) == key) {
             roster_->setWeight(index, weight);
+            saveState();
             emit rosterUpdated();
             return;
         }
@@ -228,6 +295,7 @@ void BackendBridge::clearAllData()
     history_.clear();
     drawEngine_->clearDrawnHistory();
 
+    saveState();
     emit rosterUpdated();
     emit historyUpdated();
 }
@@ -274,24 +342,26 @@ void BackendBridge::setSoundEnabled(bool enabled)
     }
 
     soundEnabled_ = enabled;
+    saveState();
     qInfo() << "sound enabled:" << enabled;
     emit soundEnabledChanged();
 }
 
-bool BackendBridge::highMotion() const
+bool BackendBridge::motionEnabled() const
 {
-    return highMotion_;
+    return motionEnabled_;
 }
 
-void BackendBridge::setHighMotion(bool enabled)
+void BackendBridge::setMotionEnabled(bool enabled)
 {
-    if (highMotion_ == enabled) {
+    if (motionEnabled_ == enabled) {
         return;
     }
 
-    highMotion_ = enabled;
-    qInfo() << "high motion:" << enabled;
-    emit highMotionChanged();
+    motionEnabled_ = enabled;
+    saveState();
+    qInfo() << "motion enabled:" << enabled;
+    emit motionEnabledChanged();
 }
 
 int BackendBridge::rosterCount() const
@@ -303,5 +373,143 @@ void BackendBridge::recordDraw(const QString &name)
 {
     const QString time = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
     history_.push_back(HistoryEntry{name, time});
+    saveState();
     emit historyUpdated();
+}
+
+QString BackendBridge::dataFilePath()
+{
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+        .filePath(QStringLiteral("data.json"));
+}
+
+QJsonObject BackendBridge::stateToJson() const
+{
+    QJsonArray roster;
+    for (std::size_t index = 0; index < roster_->size(); ++index) {
+        const xieqian::core::Participant &participant = roster_->at(index);
+
+        QJsonObject entry;
+        entry.insert(QStringLiteral("name"), QString::fromStdString(participant.name));
+        entry.insert(QStringLiteral("studentId"), QString::fromStdString(participant.studentId));
+        entry.insert(QStringLiteral("group"), QString::fromStdString(participant.group));
+        entry.insert(QStringLiteral("enabled"), participant.enabled);
+        entry.insert(QStringLiteral("weight"), participant.weight);
+        roster.append(entry);
+    }
+
+    QJsonArray history;
+    for (const HistoryEntry &record : history_) {
+        QJsonObject entry;
+        entry.insert(QStringLiteral("name"), record.name);
+        entry.insert(QStringLiteral("time"), record.time);
+        history.append(entry);
+    }
+
+    QJsonObject root;
+    root.insert(QStringLiteral("roster"), roster);
+    root.insert(QStringLiteral("history"), history);
+    root.insert(QStringLiteral("soundEnabled"), soundEnabled_);
+    root.insert(QStringLiteral("motionEnabled"), motionEnabled_);
+    return root;
+}
+
+void BackendBridge::applyData(const QJsonObject &root)
+{
+    roster_->clear();
+    for (const QJsonValue &value : root.value(QStringLiteral("roster")).toArray()) {
+        const QJsonObject entry = value.toObject();
+
+        xieqian::core::Participant participant;
+        participant.name = entry.value(QStringLiteral("name")).toString().toStdString();
+        participant.studentId = entry.value(QStringLiteral("studentId")).toString().toStdString();
+        participant.group = entry.value(QStringLiteral("group")).toString().toStdString();
+        participant.enabled = entry.value(QStringLiteral("enabled")).toBool(true);
+        participant.weight = entry.value(QStringLiteral("weight")).toDouble(1.0);
+
+        if (!participant.name.empty()) {
+            roster_->add(std::move(participant));
+        }
+    }
+
+    history_.clear();
+    for (const QJsonValue &value : root.value(QStringLiteral("history")).toArray()) {
+        const QJsonObject entry = value.toObject();
+        const QString name = entry.value(QStringLiteral("name")).toString();
+        if (name.isEmpty()) {
+            continue;
+        }
+
+        history_.push_back(HistoryEntry{name, entry.value(QStringLiteral("time")).toString()});
+    }
+
+    soundEnabled_ = root.value(QStringLiteral("soundEnabled")).toBool(true);
+    motionEnabled_ = root.value(QStringLiteral("motionEnabled")).toBool(true);
+    drawEngine_->clearDrawnHistory();
+}
+
+void BackendBridge::saveState() const
+{
+    writeJsonFile(dataFilePath(), stateToJson());
+}
+
+QString BackendBridge::chooseBackupPath()
+{
+    return QFileDialog::getSaveFileName(nullptr, QStringLiteral("备份数据"),
+                                        QStringLiteral("xieqian-backup.json"),
+                                        QStringLiteral("JSON Files (*.json)"));
+}
+
+QString BackendBridge::chooseRestorePath()
+{
+    return QFileDialog::getOpenFileName(nullptr, QStringLiteral("恢复数据"), QString(),
+                                        QStringLiteral("JSON Files (*.json)"));
+}
+
+void BackendBridge::exportData(const QString &filePath)
+{
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    QString path = filePath;
+    if (!path.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+        path += QStringLiteral(".json");
+    }
+
+    writeJsonFile(path, stateToJson());
+}
+
+void BackendBridge::importData(const QString &filePath)
+{
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "cannot read import file:" << filePath;
+        return;
+    }
+
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    if (document.isNull() || !document.isObject() || !hasStateArrays(document.object())) {
+        qWarning() << "invalid import file:" << filePath;
+        return;
+    }
+
+    const bool soundWasEnabled = soundEnabled_;
+    const bool motionWasEnabled = motionEnabled_;
+
+    applyData(document.object());
+    saveState();
+
+    emit rosterUpdated();
+    emit historyUpdated();
+    if (soundEnabled_ != soundWasEnabled) {
+        emit soundEnabledChanged();
+    }
+    if (motionEnabled_ != motionWasEnabled) {
+        emit motionEnabledChanged();
+    }
 }

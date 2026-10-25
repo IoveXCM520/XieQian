@@ -5,6 +5,8 @@ import QtQuick.Layouts
 Item {
     id: page
 
+    property string pendingImportPath: ""
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 40
@@ -73,15 +75,143 @@ Item {
 
                 Text {
                     Layout.fillWidth: true
-                    text: backendBridge.highMotion ? "高" : "低"
+                    text: backendBridge.motionEnabled ? "高" : "低"
                     color: "#8A97A5"
                     font.pixelSize: 14
                     horizontalAlignment: Text.AlignRight
                 }
 
                 Switch {
-                    checked: backendBridge.highMotion
-                    onToggled: backendBridge.highMotion = checked
+                    checked: backendBridge.motionEnabled
+                    onToggled: backendBridge.motionEnabled = checked
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 64
+            radius: 2
+            color: "#FBF9F4"
+            border.width: 1
+            border.color: "#E4DFD3"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 20
+                anchors.rightMargin: 20
+                spacing: 16
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+
+                    Text {
+                        text: "备份数据"
+                        color: "#2D3E50"
+                        font.pixelSize: 16
+                    }
+
+                    Text {
+                        text: "将名单、历史与设置导出为 JSON 文件"
+                        color: "#8A97A5"
+                        font.pixelSize: 12
+                    }
+                }
+
+                Button {
+                    id: backupButton
+
+                    implicitWidth: 110
+                    implicitHeight: 40
+                    text: "备份数据"
+
+                    onClicked: {
+                        var path = backendBridge.chooseBackupPath();
+                        if (path.length > 0)
+                            backendBridge.exportData(path);
+                    }
+
+                    background: Rectangle {
+                        radius: 2
+                        color: "transparent"
+                        border.width: 1
+                        border.color: backupButton.hovered ? "#2D3E50" : "#C9C2B2"
+                    }
+
+                    contentItem: Text {
+                        text: backupButton.text
+                        color: "#3F5A4E"
+                        font.pixelSize: 14
+                        font.letterSpacing: 2
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 64
+            radius: 2
+            color: "#FBF9F4"
+            border.width: 1
+            border.color: "#E4DFD3"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 20
+                anchors.rightMargin: 20
+                spacing: 16
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+
+                    Text {
+                        text: "恢复数据"
+                        color: "#2D3E50"
+                        font.pixelSize: 16
+                    }
+
+                    Text {
+                        text: "从 JSON 备份文件恢复名单、历史与设置"
+                        color: "#8A97A5"
+                        font.pixelSize: 12
+                    }
+                }
+
+                Button {
+                    id: restoreButton
+
+                    implicitWidth: 110
+                    implicitHeight: 40
+                    text: "恢复数据"
+
+                    onClicked: {
+                        var path = backendBridge.chooseRestorePath();
+                        if (path.length > 0) {
+                            page.pendingImportPath = path;
+                            restoreDialog.open();
+                        }
+                    }
+
+                    background: Rectangle {
+                        radius: 2
+                        color: restoreButton.hovered ? "#3A4E63" : "#2D3E50"
+                        border.width: 1
+                        border.color: "#D4AF37"
+                    }
+
+                    contentItem: Text {
+                        text: restoreButton.text
+                        color: "#F8F6F0"
+                        font.pixelSize: 14
+                        font.letterSpacing: 2
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
             }
         }
@@ -137,6 +267,84 @@ Item {
 
                     contentItem: Text {
                         text: clearButton.text
+                        color: "#FBF6F5"
+                        font.pixelSize: 14
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: restoreDialog
+
+        anchors.centerIn: Overlay.overlay
+        modal: true
+        title: "确认恢复"
+        padding: 24
+
+        contentItem: Column {
+            width: 340
+            spacing: 20
+
+            Text {
+                width: parent.width
+                text: "恢复数据将覆盖当前所有名单和历史，确定吗？"
+                color: "#2D3E50"
+                font.pixelSize: 15
+                wrapMode: Text.WordWrap
+            }
+
+            Row {
+                x: parent.width - width
+                spacing: 12
+
+                Button {
+                    id: restoreCancelButton
+
+                    width: 96
+                    height: 40
+                    text: "取消"
+
+                    onClicked: restoreDialog.close()
+
+                    background: Rectangle {
+                        radius: 2
+                        color: "transparent"
+                        border.width: 1
+                        border.color: "#B9C2CB"
+                    }
+
+                    contentItem: Text {
+                        text: restoreCancelButton.text
+                        color: "#2D3E50"
+                        font.pixelSize: 14
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+
+                Button {
+                    id: restoreConfirmButton
+
+                    width: 110
+                    height: 40
+                    text: "确认恢复"
+
+                    onClicked: {
+                        backendBridge.importData(page.pendingImportPath);
+                        restoreDialog.close();
+                    }
+
+                    background: Rectangle {
+                        radius: 2
+                        color: restoreConfirmButton.hovered ? "#9B443A" : "#8C3A31"
+                    }
+
+                    contentItem: Text {
+                        text: restoreConfirmButton.text
                         color: "#FBF6F5"
                         font.pixelSize: 14
                         horizontalAlignment: Text.AlignHCenter

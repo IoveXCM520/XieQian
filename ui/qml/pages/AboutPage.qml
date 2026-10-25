@@ -25,7 +25,7 @@ Item {
 
         Text {
             Layout.alignment: Qt.AlignHCenter
-            text: "v1.0.0"
+            text: "v1.0.0 (Build 2026)"
             color: "#8A97A5"
             font.pixelSize: 14
             font.letterSpacing: 2
@@ -37,6 +37,14 @@ Item {
             color: "#3F5A4E"
             font.pixelSize: 18
             font.letterSpacing: 4
+        }
+
+        Text {
+            Layout.alignment: Qt.AlignHCenter
+            text: "开源协议：MIT License"
+            color: "#8A97A5"
+            font.pixelSize: 13
+            font.letterSpacing: 1
         }
     }
 

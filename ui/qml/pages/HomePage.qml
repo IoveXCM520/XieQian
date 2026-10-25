@@ -161,7 +161,7 @@ Item {
         target: wheel
         property: "angle"
         direction: RotationAnimation.Numerical
-        duration: 2500
+        duration: backendBridge.motionEnabled ? 2500 : 500
         easing.type: Easing.OutQuint
 
         onStopped: {

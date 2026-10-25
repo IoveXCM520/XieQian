@@ -1,6 +1,7 @@
 build/
 bin/
 out/
+installer-output/
 .cache/
 .vscode/
 .idea/

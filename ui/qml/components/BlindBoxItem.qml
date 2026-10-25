@@ -9,6 +9,8 @@ Item {
 
     property int boxCount: 3
 
+    readonly property bool reducedMotion: !backendBridge.motionEnabled
+
     readonly property real availableWidth: 680
     readonly property real boxSpacing: boxCount <= 3 ? 56 : (boxCount <= 5 ? 30 : 14)
     readonly property real boxWidth: Math.min(150, Math.floor((availableWidth - boxSpacing * (boxCount - 1)) / boxCount))
@@ -60,7 +62,7 @@ Item {
     Timer {
         id: revealTimer
 
-        interval: 1100
+        interval: reducedMotion ? 300 : 1100
         repeat: false
 
         onTriggered: boxRoot.revealFinished()
@@ -73,7 +75,7 @@ Item {
         property: "highlightStep"
         from: 0
         to: boxRoot.boxCount * 4
-        duration: boxRoot.boxCount * 390
+        duration: boxRoot.reducedMotion ? 300 : boxRoot.boxCount * 390
         easing.type: Easing.Linear
 
         onStopped: {
@@ -108,13 +110,13 @@ Item {
 
             Behavior on y {
                 NumberAnimation {
-                    duration: 520
+                    duration: reducedMotion ? 150 : 520
                     easing.type: Easing.OutBack
                 }
             }
             Behavior on opacity {
                 NumberAnimation {
-                    duration: 420
+                    duration: reducedMotion ? 120 : 420
                 }
             }
 
@@ -223,19 +225,19 @@ Item {
 
                 Behavior on y {
                     NumberAnimation {
-                        duration: 620
+                        duration: reducedMotion ? 150 : 620
                         easing.type: Easing.OutCubic
                     }
                 }
                 Behavior on rotation {
                     NumberAnimation {
-                        duration: 620
+                        duration: reducedMotion ? 150 : 620
                         easing.type: Easing.OutCubic
                     }
                 }
                 Behavior on opacity {
                     NumberAnimation {
-                        duration: 520
+                        duration: reducedMotion ? 120 : 520
                         easing.type: Easing.InQuad
                     }
                 }
@@ -288,19 +290,19 @@ Item {
 
                 Behavior on y {
                     NumberAnimation {
-                        duration: 520
+                        duration: reducedMotion ? 150 : 520
                         easing.type: Easing.OutCubic
                     }
                 }
                 Behavior on scale {
                     NumberAnimation {
-                        duration: 520
+                        duration: reducedMotion ? 150 : 520
                         easing.type: Easing.OutBack
                     }
                 }
                 Behavior on opacity {
                     NumberAnimation {
-                        duration: 360
+                        duration: reducedMotion ? 120 : 360
                     }
                 }
 

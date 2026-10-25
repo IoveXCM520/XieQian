@@ -12,6 +12,8 @@ Item {
     property int cardCount: 6
     property bool showPointer: true
 
+    readonly property bool reducedMotion: !backendBridge.motionEnabled
+
     readonly property real availableWidth: 680
     readonly property real cardSpacing: cardCount <= 6 ? 22 : 12
     readonly property real cardWidth: Math.min(92, Math.floor((availableWidth - cardSpacing * (cardCount - 1)) / cardCount))
@@ -72,28 +74,28 @@ Item {
             property: "shake"
             from: 0
             to: -9
-            duration: 60
+            duration: reducedMotion ? 20 : 60
         }
         NumberAnimation {
             target: flipRoot
             property: "shake"
             from: -9
             to: 9
-            duration: 80
+            duration: reducedMotion ? 25 : 80
         }
         NumberAnimation {
             target: flipRoot
             property: "shake"
             from: 9
             to: -6
-            duration: 70
+            duration: reducedMotion ? 20 : 70
         }
         NumberAnimation {
             target: flipRoot
             property: "shake"
             from: -6
             to: 0
-            duration: 70
+            duration: reducedMotion ? 20 : 70
         }
         SequentialAnimation {
             loops: 3
@@ -103,7 +105,7 @@ Item {
                 property: "spread"
                 from: 0
                 to: 62
-                duration: 150
+                duration: reducedMotion ? 40 : 150
                 easing.type: Easing.InOutQuad
             }
             NumberAnimation {
@@ -111,7 +113,7 @@ Item {
                 property: "spread"
                 from: 62
                 to: 0
-                duration: 150
+                duration: reducedMotion ? 40 : 150
                 easing.type: Easing.InOutQuad
             }
         }
@@ -124,7 +126,7 @@ Item {
         id: flipAnimation
 
         PauseAnimation {
-            duration: 140
+            duration: reducedMotion ? 30 : 140
         }
         ScriptAction {
             script: {
@@ -136,7 +138,7 @@ Item {
             }
         }
         PauseAnimation {
-            duration: 200
+            duration: reducedMotion ? 40 : 200
         }
         ScriptAction {
             script: {
@@ -148,7 +150,7 @@ Item {
             }
         }
         PauseAnimation {
-            duration: 760
+            duration: reducedMotion ? 180 : 760
         }
         ScriptAction {
             script: flipRoot.revealFinished()
@@ -184,13 +186,13 @@ Item {
 
             Behavior on y {
                 NumberAnimation {
-                    duration: 240
+                    duration: reducedMotion ? 80 : 240
                     easing.type: Easing.OutCubic
                 }
             }
             Behavior on flipAngle {
                 NumberAnimation {
-                    duration: 720
+                    duration: reducedMotion ? 150 : 720
                     easing.type: Easing.OutCubic
                 }
             }

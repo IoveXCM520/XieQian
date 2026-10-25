@@ -46,8 +46,21 @@ jobs:
         copy build\Release\XieQian.exe deploy\
         windeployqt deploy\XieQian.exe --release --qmldir ui\qml --no-translations --no-system-d3d-compiler
 
+    - name: Compile Installer
+      shell: cmd
+      run: |
+        choco install innosetup -y
+        call refreshenv
+        iscc installer.iss
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: XieQian-Windows
         path: deploy/
+
+    - name: Upload Installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: XieQian-Setup
+        path: installer-output/*.exe
