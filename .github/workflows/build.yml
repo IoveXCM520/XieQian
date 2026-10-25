@@ -3,6 +3,7 @@ name: Windows Build
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
 
@@ -46,6 +47,10 @@ jobs:
         copy build\Release\XieQian.exe deploy\
         windeployqt deploy\XieQian.exe --release --qmldir ui\qml --no-translations --no-system-d3d-compiler
 
+    - name: Package Portable Zip
+      shell: pwsh
+      run: Compress-Archive -Path deploy\* -DestinationPath XieQian-Windows.zip -Force
+
     - name: Compile Installer
       shell: cmd
       run: |
@@ -57,10 +62,36 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: XieQian-Windows
-        path: deploy/
+        path: XieQian-Windows.zip
 
     - name: Upload Installer
       uses: actions/upload-artifact@v4
       with:
         name: XieQian-Setup
         path: installer-output/*.exe
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: XieQian-Setup
+          path: artifacts/
+      - uses: actions/download-artifact@v4
+        with:
+          name: XieQian-Windows
+          path: artifacts/
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/XieQian-Setup-1.0.0.exe
+            artifacts/XieQian-Windows.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
