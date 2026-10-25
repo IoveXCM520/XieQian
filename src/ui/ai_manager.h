@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <memory>
 
 #include <QObject>
@@ -27,9 +26,10 @@ signals:
     void awardSpeechFailed(const QString &message);
 
 private:
-    using ContentHandler = std::function<void(const QString &)>;
+    enum class RequestKind { MockRoster, AwardSpeech };
 
-    void requestCompletion(const QString &prompt, const ContentHandler &onContent, const ContentHandler &onError);
+    void requestCompletion(const QString &prompt, RequestKind kind);
+    void emitFailure(RequestKind kind, const QString &message);
     [[nodiscard]] static QVariantList parseRoster(const QString &content);
     [[nodiscard]] static QString cleanSpeech(const QString &content);
 

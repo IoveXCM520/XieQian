@@ -20,7 +20,7 @@ constexpr int kRequestTimeoutMs = 60000;
 
 QString apiKey()
 {
-    return QStringLiteral(DEEPSEEK_API_KEY).trimmed();
+    return QString::fromUtf8(DEEPSEEK_API_KEY).trimmed();
 }
 
 QString rosterPrompt()
@@ -40,17 +40,7 @@ AiManager::~AiManager() = default;
 
 void AiManager::generateMockRoster()
 {
-    requestCompletion(
-        rosterPrompt(),
-        [this](const QString &content) {
-            const QVariantList roster = parseRoster(content);
-            if (roster.isEmpty()) {
-                emit mockRosterFailed(QStringLiteral("AI 返回的名单格式无法解析"));
-                return;
-            }
-            emit mockRosterReady(roster);
-        },
-        [this](const QString &message) { emit mockRosterFailed(message); });
+    requestCompletion(rosterPrompt(), RequestKind::MockRoster);
 }
 
 void AiManager::generateAwardSpeech(const QString &winnerName)
@@ -63,23 +53,14 @@ void AiManager::generateAwardSpeech(const QString &winnerName)
 
     requestCompletion(
         QStringLiteral("请为抽奖中奖者【%1】写一句 20 字以内的幽默/励志颁奖词").arg(winner),
-        [this](const QString &content) {
-            const QString speech = cleanSpeech(content);
-            if (speech.isEmpty()) {
-                emit awardSpeechFailed(QStringLiteral("AI 返回内容为空"));
-                return;
-            }
-            emit awardSpeechReady(speech);
-        },
-        [this](const QString &message) { emit awardSpeechFailed(message); });
+        RequestKind::AwardSpeech);
 }
 
-void AiManager::requestCompletion(const QString &prompt, const ContentHandler &onContent,
-                                  const ContentHandler &onError)
+void AiManager::requestCompletion(const QString &prompt, RequestKind kind)
 {
     const QString key = apiKey();
     if (key.isEmpty()) {
-        onError(QStringLiteral("未配置 AI 密钥"));
+        emitFailure(kind, QStringLiteral("未配置 AI 密钥"));
         return;
     }
 
@@ -101,22 +82,22 @@ void AiManager::requestCompletion(const QString &prompt, const ContentHandler &o
     request.setTransferTimeout(kRequestTimeoutMs);
 
     QNetworkReply *reply = network_->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
-    connect(reply, &QNetworkReply::finished, this, [reply, onContent, onError]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, kind]() {
         reply->deleteLater();
 
         if (reply->error() != QNetworkReply::NoError) {
-            onError(reply->errorString());
+            emitFailure(kind, reply->errorString());
             return;
         }
 
         const QJsonDocument document = QJsonDocument::fromJson(reply->readAll());
         const QJsonArray choices = document.object().value(QStringLiteral("choices")).toArray();
         if (choices.isEmpty()) {
-            onError(QStringLiteral("AI 返回内容为空"));
+            emitFailure(kind, QStringLiteral("AI 返回内容为空"));
             return;
         }
 
-        const QString content = choices.front()
+        const QString content = choices.first()
                                     .toObject()
                                     .value(QStringLiteral("message"))
                                     .toObject()
@@ -124,12 +105,36 @@ void AiManager::requestCompletion(const QString &prompt, const ContentHandler &o
                                     .toString()
                                     .trimmed();
         if (content.isEmpty()) {
-            onError(QStringLiteral("AI 返回内容为空"));
+            emitFailure(kind, QStringLiteral("AI 返回内容为空"));
             return;
         }
 
-        onContent(content);
+        if (kind == RequestKind::MockRoster) {
+            const QVariantList roster = parseRoster(content);
+            if (roster.isEmpty()) {
+                emitFailure(kind, QStringLiteral("AI 返回的名单格式无法解析"));
+                return;
+            }
+            emit mockRosterReady(roster);
+            return;
+        }
+
+        const QString speech = cleanSpeech(content);
+        if (speech.isEmpty()) {
+            emitFailure(kind, QStringLiteral("AI 返回内容为空"));
+            return;
+        }
+        emit awardSpeechReady(speech);
     });
+}
+
+void AiManager::emitFailure(RequestKind kind, const QString &message)
+{
+    if (kind == RequestKind::MockRoster) {
+        emit mockRosterFailed(message);
+    } else {
+        emit awardSpeechFailed(message);
+    }
 }
 
 QVariantList AiManager::parseRoster(const QString &content)
