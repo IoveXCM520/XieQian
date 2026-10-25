@@ -4,14 +4,14 @@
 
 using xieqian::core::Roster;
 
-TEST_CASE("名单默认为空", "[roster]") {
+TEST_CASE("Roster starts empty", "[roster]") {
     Roster roster;
 
     REQUIRE(roster.size() == 0);
     REQUIRE(roster.enabledParticipants().empty());
 }
 
-TEST_CASE("加入参与者后保持插入顺序", "[roster]") {
+TEST_CASE("Roster keeps insertion order", "[roster]") {
     Roster roster;
     roster.add("苏婉宁");
     roster.add("林砚舟");
@@ -23,7 +23,7 @@ TEST_CASE("加入参与者后保持插入顺序", "[roster]") {
     REQUIRE(roster.at(1).enabled);
 }
 
-TEST_CASE("禁用状态决定参与者是否进入可用名单", "[roster]") {
+TEST_CASE("Disabled participants are excluded from candidates", "[roster]") {
     Roster roster;
     roster.add("苏婉宁");
     roster.add("林砚舟", false);
@@ -44,7 +44,7 @@ TEST_CASE("禁用状态决定参与者是否进入可用名单", "[roster]") {
     REQUIRE(afterDisable[1].name == "顾南乔");
 }
 
-TEST_CASE("清空名单后不再保留参与者", "[roster]") {
+TEST_CASE("Clear removes all participants", "[roster]") {
     Roster roster;
     roster.add("苏婉宁");
     roster.clear();

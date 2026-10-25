@@ -20,7 +20,7 @@ std::mt19937_64 fixedGenerator()
 
 }  // namespace
 
-TEST_CASE("空名单抽不出结果", "[draw]") {
+TEST_CASE("Empty roster yields no winner", "[draw]") {
     DrawEngine engine(fixedGenerator());
     Roster roster;
 
@@ -28,7 +28,7 @@ TEST_CASE("空名单抽不出结果", "[draw]") {
     REQUIRE(engine.drawMultiple(roster, 3).empty());
 }
 
-TEST_CASE("只有一名可用参与者时结果唯一", "[draw]") {
+TEST_CASE("Single candidate is always drawn", "[draw]") {
     DrawEngine engine(fixedGenerator());
     Roster roster;
     roster.add("苏婉宁");
@@ -41,7 +41,7 @@ TEST_CASE("只有一名可用参与者时结果唯一", "[draw]") {
     }
 }
 
-TEST_CASE("中奖者必定来自可用名单", "[draw]") {
+TEST_CASE("Winner always comes from candidates", "[draw]") {
     DrawEngine engine(fixedGenerator());
     Roster roster;
     roster.add("苏婉宁");
@@ -57,7 +57,7 @@ TEST_CASE("中奖者必定来自可用名单", "[draw]") {
     }
 }
 
-TEST_CASE("多次抽取不放回且不超过可用人数", "[draw]") {
+TEST_CASE("Multiple draws are unique and bounded by pool size", "[draw]") {
     DrawEngine engine(fixedGenerator());
     Roster roster;
     roster.add("苏婉宁");
@@ -76,7 +76,7 @@ TEST_CASE("多次抽取不放回且不超过可用人数", "[draw]") {
     REQUIRE(std::unique(sorted.begin(), sorted.end()) == sorted.end());
 }
 
-TEST_CASE("抽取数量为零时返回空结果", "[draw]") {
+TEST_CASE("Zero count yields empty result", "[draw]") {
     DrawEngine engine(fixedGenerator());
     Roster roster;
     roster.add("苏婉宁");
