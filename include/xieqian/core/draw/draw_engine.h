@@ -28,11 +28,10 @@ public:
     // NoRepeat 策略下累积的中签记录，清空名单时应同步重置。
     void clearDrawnHistory();
 
+    [[nodiscard]] bool isDrawn(const Participant &participant) const;
+
 private:
     [[nodiscard]] std::vector<Participant> drawWeighted(const std::vector<Participant> &pool, std::size_t count);
-
-    // 中签记录以学号为准，缺学号时退化为姓名。
-    [[nodiscard]] static std::string participantId(const Participant &participant);
 
     std::mt19937_64 rng_;
     std::vector<std::string> drawnIds_;

@@ -8,7 +8,11 @@ Item {
     property var participants: []
 
     function refresh() {
-        participants = backendBridge.getParticipants();
+        participants = backendBridge.getParticipantsWithStatus();
+    }
+
+    function weightLabel(value) {
+        return "x" + Number(value).toFixed(1);
     }
 
     Component.onCompleted: refresh()
@@ -17,6 +21,10 @@ Item {
         target: backendBridge
 
         function onRosterUpdated() {
+            page.refresh();
+        }
+
+        function onHistoryUpdated() {
             page.refresh();
         }
     }
@@ -42,6 +50,33 @@ Item {
                 text: backendBridge.rosterCount + " 人"
                 color: "#3F5A4E"
                 font.pixelSize: 14
+            }
+
+            Button {
+                id: resetButton
+
+                implicitWidth: 140
+                implicitHeight: 40
+                text: "重置防连抽"
+                enabled: backendBridge.rosterCount > 0
+
+                onClicked: backendBridge.resetDrawnHistory()
+
+                background: Rectangle {
+                    radius: 2
+                    color: "transparent"
+                    border.width: 1
+                    border.color: resetButton.hovered ? "#2D3E50" : "#C9C2B2"
+                }
+
+                contentItem: Text {
+                    text: resetButton.text
+                    color: resetButton.enabled ? "#3F5A4E" : "#A4B0BE"
+                    font.pixelSize: 14
+                    font.letterSpacing: 2
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
 
             Button {
@@ -93,7 +128,13 @@ Item {
                 color: "#FBF9F4"
                 border.width: 1
                 border.color: modelData.enabled ? "#D8E0D6" : "#E4DFD3"
-                opacity: modelData.enabled ? 1.0 : 0.55
+                opacity: !modelData.enabled ? 0.55 : (modelData.isDrawn ? 0.72 : 1.0)
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: backendBridge.toggleParticipantStatus(modelData.index)
+                }
 
                 RowLayout {
                     anchors.fill: parent
@@ -101,12 +142,34 @@ Item {
                     anchors.rightMargin: 20
                     spacing: 16
 
-                    Text {
-                        Layout.preferredWidth: 140
-                        text: modelData.name
-                        color: "#2D3E50"
-                        font.pixelSize: 18
-                        elide: Text.ElideRight
+                    RowLayout {
+                        Layout.preferredWidth: 230
+                        spacing: 8
+
+                        Text {
+                            Layout.preferredWidth: 140
+                            text: modelData.name
+                            color: "#2D3E50"
+                            font.pixelSize: 18
+                            elide: Text.ElideRight
+                        }
+
+                        Rectangle {
+                            visible: modelData.isDrawn
+                            width: 62
+                            height: 22
+                            radius: 2
+                            color: "transparent"
+                            border.width: 1
+                            border.color: "#3F5A4E"
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "已抽中"
+                                color: "#3F5A4E"
+                                font.pixelSize: 11
+                            }
+                        }
                     }
 
                     Text {
@@ -123,6 +186,43 @@ Item {
                     }
 
                     Rectangle {
+                        width: 64
+                        height: 30
+                        radius: 15
+                        color: weightArea.containsMouse ? "#EFEAE0" : "transparent"
+                        border.width: 1
+                        border.color: "#D4AF37"
+
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: 140
+                            }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: page.weightLabel(modelData.weight)
+                            color: "#8C6B1F"
+                            font.pixelSize: 13
+                        }
+
+                        MouseArea {
+                            id: weightArea
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+
+                            onClicked: {
+                                weightDialog.targetId = modelData.id;
+                                weightDialog.targetName = modelData.name;
+                                weightField.text = modelData.weight.toString();
+                                weightDialog.open();
+                            }
+                        }
+                    }
+
+                    Rectangle {
                         width: 10
                         height: 10
                         radius: width / 2
@@ -130,12 +230,6 @@ Item {
                         border.width: 1
                         border.color: modelData.enabled ? "#3F5A4E" : "#B9C2CB"
                     }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: backendBridge.toggleParticipantStatus(modelData.index)
                 }
             }
 
@@ -147,5 +241,109 @@ Item {
                 font.pixelSize: 16
             }
         }
+    }
+
+    Dialog {
+        id: weightDialog
+
+        property string targetId: ""
+        property string targetName: ""
+
+        anchors.centerIn: parent
+        parent: Overlay.overlay
+        modal: true
+        width: 340
+        padding: 24
+
+        background: Rectangle {
+            color: "#FBF9F4"
+            border.width: 1
+            border.color: "#D4AF37"
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 14
+
+            Text {
+                text: weightDialog.targetName + " · 中签权重"
+                color: "#2D3E50"
+                font.pixelSize: 16
+                font.letterSpacing: 2
+            }
+
+            TextField {
+                id: weightField
+
+                Layout.fillWidth: true
+                placeholderText: "大于 0 的数字"
+                selectByMouse: true
+
+                validator: DoubleValidator {
+                    bottom: 0.1
+                    top: 1000
+                    decimals: 2
+                }
+
+                onAccepted: weightDialog.accept()
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: 10
+
+                Button {
+                    id: weightCancelButton
+
+                    text: "取 消"
+                    implicitWidth: 90
+                    implicitHeight: 36
+
+                    onClicked: weightDialog.reject()
+
+                    background: Rectangle {
+                        radius: 2
+                        color: "transparent"
+                        border.width: 1
+                        border.color: "#C9C2B2"
+                    }
+
+                    contentItem: Text {
+                        text: weightCancelButton.text
+                        color: "#6B7A88"
+                        font.pixelSize: 14
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+
+                Button {
+                    id: weightApplyButton
+
+                    text: "确 定"
+                    implicitWidth: 90
+                    implicitHeight: 36
+                    enabled: weightField.acceptableInput && weightField.text.length > 0
+
+                    onClicked: weightDialog.accept()
+
+                    background: Rectangle {
+                        radius: 2
+                        color: weightApplyButton.enabled ? "#2D3E50" : "#B9C2CB"
+                        border.width: 1
+                        border.color: weightApplyButton.enabled ? "#D4AF37" : "#B9C2CB"
+                    }
+
+                    contentItem: Text {
+                        text: weightApplyButton.text
+                        color: "#F8F6F0"
+                        font.pixelSize: 14
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+            }
+        }
+
+        onAccepted: backendBridge.updateParticipantWeight(targetId, parseFloat(weightField.text))
     }
 }

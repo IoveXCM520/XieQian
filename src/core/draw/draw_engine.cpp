@@ -85,6 +85,12 @@ void DrawEngine::clearDrawnHistory()
     drawnIds_.clear();
 }
 
+bool DrawEngine::isDrawn(const Participant &participant) const
+{
+    const auto id = participantId(participant);
+    return std::find(drawnIds_.begin(), drawnIds_.end(), id) != drawnIds_.end();
+}
+
 std::vector<Participant> DrawEngine::drawWeighted(const std::vector<Participant> &pool, std::size_t count)
 {
     std::vector<Participant> remaining = pool;
@@ -118,11 +124,6 @@ std::vector<Participant> DrawEngine::drawWeighted(const std::vector<Participant>
         remaining.erase(remaining.begin() + static_cast<std::ptrdiff_t>(picked));
     }
     return winners;
-}
-
-std::string DrawEngine::participantId(const Participant &participant)
-{
-    return participant.studentId.empty() ? participant.name : participant.studentId;
 }
 
 }  // namespace xieqian::core

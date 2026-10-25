@@ -1,6 +1,7 @@
 #include "backend_bridge.h"
 
 #include <algorithm>
+#include <cmath>
 #include <random>
 #include <string>
 
@@ -125,6 +126,7 @@ bool BackendBridge::loadRosterFromCsv(const QString &filePath)
         return false;
     }
 
+    drawEngine_->clearDrawnHistory();
     emit rosterUpdated();
     return true;
 }
@@ -171,6 +173,27 @@ QVariantList BackendBridge::getParticipants()
     return participants;
 }
 
+QVariantList BackendBridge::getParticipantsWithStatus()
+{
+    QVariantList participants;
+    for (std::size_t index = 0; index < roster_->size(); ++index) {
+        const xieqian::core::Participant &participant = roster_->at(index);
+
+        QVariantMap entry;
+        entry.insert(QStringLiteral("index"), static_cast<int>(index));
+        entry.insert(QStringLiteral("id"),
+                     QString::fromStdString(xieqian::core::participantId(participant)));
+        entry.insert(QStringLiteral("name"), QString::fromStdString(participant.name));
+        entry.insert(QStringLiteral("studentId"), QString::fromStdString(participant.studentId));
+        entry.insert(QStringLiteral("group"), QString::fromStdString(participant.group));
+        entry.insert(QStringLiteral("enabled"), participant.enabled);
+        entry.insert(QStringLiteral("weight"), participant.weight);
+        entry.insert(QStringLiteral("isDrawn"), drawEngine_->isDrawn(participant));
+        participants.append(entry);
+    }
+    return participants;
+}
+
 void BackendBridge::toggleParticipantStatus(int index)
 {
     if (index < 0 || static_cast<std::size_t>(index) >= roster_->size()) {
@@ -179,6 +202,28 @@ void BackendBridge::toggleParticipantStatus(int index)
 
     const auto position = static_cast<std::size_t>(index);
     roster_->setEnabled(position, !roster_->at(position).enabled);
+    emit rosterUpdated();
+}
+
+void BackendBridge::updateParticipantWeight(const QString &id, double weight)
+{
+    if (id.isEmpty() || !std::isfinite(weight) || weight <= 0.0) {
+        return;
+    }
+
+    const std::string key = id.toStdString();
+    for (std::size_t index = 0; index < roster_->size(); ++index) {
+        if (xieqian::core::participantId(roster_->at(index)) == key) {
+            roster_->setWeight(index, weight);
+            emit rosterUpdated();
+            return;
+        }
+    }
+}
+
+void BackendBridge::resetDrawnHistory()
+{
+    drawEngine_->clearDrawnHistory();
     emit rosterUpdated();
 }
 
@@ -208,6 +253,7 @@ int BackendBridge::currentDrawMode() const
 {
     return static_cast<int>(currentDrawMode_);
 }
+
 int BackendBridge::drawCount() const
 {
     return drawCount_;

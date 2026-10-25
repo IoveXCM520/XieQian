@@ -1,4 +1,5 @@
 #include <atomic>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <fstream>
@@ -155,4 +156,60 @@ TEST_CASE("Csv parser keeps the student id when the group is missing", "[csv]") 
     REQUIRE(roster.at(0).name == "苏婉宁");
     REQUIRE(roster.at(0).studentId == "2023001");
     REQUIRE(roster.at(0).group.empty());
+}
+
+TEST_CASE("Csv parser defaults the weight to one when the column is missing", "[csv][weight]") {
+    const TempCsvFile file(
+        "姓名,学号,分组\n"
+        "苏婉宁,2023001,一组\n");
+    Roster roster;
+    CsvParser parser;
+
+    REQUIRE(parser.parseFile(file.path(), roster));
+    REQUIRE(roster.size() == 1);
+    REQUIRE(roster.at(0).weight == Catch::Approx(1.0));
+}
+
+TEST_CASE("Csv parser reads the optional weight column", "[csv][weight]") {
+    const TempCsvFile file(
+        "姓名,学号,分组,权重\n"
+        "苏婉宁,2023001,一组,2.5\n"
+        "林砚舟,2023002,二组,\n"
+        "顾南乔,2023003,三组,abc\n"
+        "白清让,2023004,四组,0\n"
+        "温言澈,2023005,五组,-3\n");
+    Roster roster;
+    CsvParser parser;
+
+    REQUIRE(parser.parseFile(file.path(), roster));
+    REQUIRE(roster.size() == 5);
+
+    REQUIRE(roster.at(0).name == "苏婉宁");
+    REQUIRE(roster.at(0).weight == Catch::Approx(2.5));
+
+    REQUIRE(roster.at(1).name == "林砚舟");
+    REQUIRE(roster.at(1).weight == Catch::Approx(1.0));
+
+    REQUIRE(roster.at(2).name == "顾南乔");
+    REQUIRE(roster.at(2).weight == Catch::Approx(1.0));
+
+    REQUIRE(roster.at(3).name == "白清让");
+    REQUIRE(roster.at(3).weight == Catch::Approx(1.0));
+
+    REQUIRE(roster.at(4).name == "温言澈");
+    REQUIRE(roster.at(4).weight == Catch::Approx(1.0));
+}
+
+TEST_CASE("Csv parser accepts a fractional weight with surrounding spaces", "[csv][weight]") {
+    const TempCsvFile file(
+        "姓名,学号,分组,权重\n"
+        "苏婉宁,2023001,一组, 0.75 \n"
+        "林砚舟,2023002,二组,3\n");
+    Roster roster;
+    CsvParser parser;
+
+    REQUIRE(parser.parseFile(file.path(), roster));
+    REQUIRE(roster.size() == 2);
+    REQUIRE(roster.at(0).weight == Catch::Approx(0.75));
+    REQUIRE(roster.at(1).weight == Catch::Approx(3.0));
 }

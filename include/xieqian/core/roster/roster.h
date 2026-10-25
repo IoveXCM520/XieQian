@@ -14,6 +14,9 @@ struct Participant {
     double weight = 1.0;
 };
 
+// 参与者标识：学号优先，缺学号时使用姓名。
+[[nodiscard]] std::string participantId(const Participant &participant);
+
 class Roster
 {
 public:
@@ -22,6 +25,7 @@ public:
     void clear();
 
     void setEnabled(std::size_t index, bool enabled);
+    void setWeight(std::size_t index, double weight);
 
     [[nodiscard]] std::size_t size() const;
     [[nodiscard]] const Participant &at(std::size_t index) const;

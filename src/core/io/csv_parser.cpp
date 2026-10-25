@@ -1,12 +1,16 @@
 #include "xieqian/core/io/csv_parser.h"
 
+#include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <fstream>
 #include <utility>
 #include <vector>
 
 namespace xieqian::core {
 namespace {
+
+constexpr double kDefaultWeight = 1.0;
 
 std::string trim(const std::string &value)
 {
@@ -41,6 +45,20 @@ void stripUtf8Bom(std::string &line)
     if (line.compare(0, bom.size(), bom) == 0) {
         line.erase(0, bom.size());
     }
+}
+
+double parseWeight(const std::string &value)
+{
+    if (value.empty()) {
+        return kDefaultWeight;
+    }
+
+    char *end = nullptr;
+    const double parsed = std::strtod(value.c_str(), &end);
+    if (end == value.c_str() || *end != '\0' || !std::isfinite(parsed) || parsed <= 0.0) {
+        return kDefaultWeight;
+    }
+    return parsed;
 }
 
 }  // namespace
@@ -90,6 +108,9 @@ bool CsvParser::parseFile(const std::string &filePath, Roster &roster)
         }
         if (fields.size() > 2) {
             participant.group = fields[2];
+        }
+        if (fields.size() > 3) {
+            participant.weight = parseWeight(fields[3]);
         }
         parsed.push_back(std::move(participant));
     }

@@ -29,6 +29,16 @@ void Roster::setEnabled(std::size_t index, bool enabled)
     participants_.at(index).enabled = enabled;
 }
 
+void Roster::setWeight(std::size_t index, double weight)
+{
+    participants_.at(index).weight = weight;
+}
+
+std::string participantId(const Participant &participant)
+{
+    return participant.studentId.empty() ? participant.name : participant.studentId;
+}
+
 std::size_t Roster::size() const
 {
     return participants_.size();

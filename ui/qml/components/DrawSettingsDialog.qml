@@ -9,8 +9,11 @@ Item {
     opacity: 0
     z: 100
 
+    property int activeStrategy: 0
+
     function open() {
         countSpin.value = backendBridge.drawCount;
+        activeStrategy = backendBridge.drawStrategy;
         for (var i = 0; i < strategyRepeater.count; ++i) {
             var button = strategyRepeater.itemAt(i);
             if (button)
@@ -151,7 +154,22 @@ Item {
                         text: modelData.label
                         font.pixelSize: 14
                         ButtonGroup.group: strategyGroup
+
+                        onToggled: {
+                            if (checked)
+                                dialogRoot.activeStrategy = index;
+                        }
                     }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 6
+                    visible: dialogRoot.activeStrategy === 2
+                    text: "* 请前往名单管理页调整各成员的中签权重"
+                    color: "#8A97A5"
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
                 }
             }
 
