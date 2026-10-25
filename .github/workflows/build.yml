@@ -1,0 +1,45 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '6.5.0'
+        host: 'windows'
+        target: 'desktop'
+        arch: 'win64_msvc2019_64'
+
+    - name: Install Catch2
+      run: |
+        git clone --depth 1 --branch v3.16.1 https://github.com/catchorg/Catch2.git "$env:RUNNER_TEMP/Catch2"
+        cmake -S "$env:RUNNER_TEMP/Catch2" -B "$env:RUNNER_TEMP/Catch2-build" -DBUILD_TESTING=OFF
+        cmake --build "$env:RUNNER_TEMP/Catch2-build" --config Release
+        cmake --install "$env:RUNNER_TEMP/Catch2-build" --config Release --prefix "$env:RUNNER_TEMP/Catch2-install"
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCatch2_DIR="$env:RUNNER_TEMP/Catch2-install/lib/cmake/Catch2"
+
+    - name: Build Core and App
+      run: cmake --build build --config Release
+
+    - name: Run Tests
+      working-directory: build
+      run: ctest -C Release --output-on-failure
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: XieQian-Windows
+        path: build/XieQian.exe
