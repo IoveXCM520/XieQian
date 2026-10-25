@@ -33,7 +33,6 @@ public:
     Q_INVOKABLE bool loadRosterFromCsv(const QString &filePath);
     Q_INVOKABLE void openCsvFileDialog();
     Q_INVOKABLE void mockImportCsv();
-    Q_INVOKABLE QVariantList getParticipants();
     Q_INVOKABLE QVariantList getParticipantsWithStatus();
     Q_INVOKABLE void toggleParticipantStatus(int index);
     Q_INVOKABLE void updateParticipantWeight(const QString &id, double weight);

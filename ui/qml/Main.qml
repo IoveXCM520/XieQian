@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
+import QtMultimedia
 
 import "pages"
 
@@ -16,6 +18,89 @@ ApplicationWindow {
     color: "#F8F6F0"
 
     property int currentPage: 0
+    readonly property string audioBase: "qrc:/ui/audio/"
+
+    // 供子页面调用：点击、旋转、中奖三类音效统一由窗口管理
+    function playClick() {
+        if (!backendBridge.soundEnabled)
+            return;
+        clickSound.stop();
+        clickSound.play();
+    }
+
+    function playSpin() {
+        if (!backendBridge.soundEnabled)
+            return;
+        spinSound.play();
+    }
+
+    function stopSpin() {
+        spinSound.stop();
+    }
+
+    function playWin() {
+        if (!backendBridge.soundEnabled)
+            return;
+        winSound.stop();
+        winSound.play();
+    }
+
+    function toggleFullScreen() {
+        if (window.visibility === Window.FullScreen)
+            window.showNormal();
+        else
+            window.showFullScreen();
+    }
+
+    Shortcut {
+        sequence: "F11"
+        onActivated: window.toggleFullScreen()
+    }
+
+    Shortcut {
+        sequence: "Esc"
+        onActivated: {
+            if (window.visibility === Window.FullScreen)
+                window.showNormal();
+        }
+    }
+
+    Connections {
+        target: backendBridge
+
+        function onSoundEnabledChanged() {
+            if (!backendBridge.soundEnabled)
+                window.stopSpin();
+        }
+    }
+
+    MediaPlayer {
+        id: clickSound
+
+        source: window.audioBase + "click.wav"
+        audioOutput: AudioOutput {
+            volume: 0.65
+        }
+    }
+
+    MediaPlayer {
+        id: spinSound
+
+        source: window.audioBase + "spin.wav"
+        loops: MediaPlayer.Infinite
+        audioOutput: AudioOutput {
+            volume: 0.35
+        }
+    }
+
+    MediaPlayer {
+        id: winSound
+
+        source: window.audioBase + "win.wav"
+        audioOutput: AudioOutput {
+            volume: 0.85
+        }
+    }
 
     RowLayout {
         anchors.fill: parent

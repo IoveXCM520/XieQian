@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Window
+import QtQuick.Particles
 
 Item {
     id: cardRoot
@@ -11,59 +13,60 @@ Item {
 
     signal continueRequested()
 
+    onVisibleChanged: {
+        if (cardRoot.visible && Window.window)
+            Window.window.playWin();
+    }
+
     Rectangle {
         anchors.fill: parent
         color: "#F8F6F0"
         opacity: 0.72
     }
 
-    Repeater {
-        model: 24
+    // 金箔粒子：贺卡展示期间从顶部持续散落
+    ParticleSystem {
+        id: foil
+
+        anchors.fill: parent
+        z: 1
+        running: cardRoot.visible
+    }
+
+    Emitter {
+        system: foil
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 1
+        emitRate: cardRoot.multi ? 36 : 26
+        lifeSpan: 2600
+        lifeSpanVariation: 800
+        size: 10
+        sizeVariation: 5
+
+        velocity: AngleDirection {
+            angle: 90
+            angleVariation: 20
+            magnitude: 90
+            magnitudeVariation: 45
+        }
+
+        acceleration: PointDirection {
+            y: 35
+            yVariation: 10
+        }
+    }
+
+    ItemParticle {
+        system: foil
+        fade: true
 
         delegate: Rectangle {
-            id: foil
-
-            readonly property int travelTime: 1500 + index * 30
-
-            width: index % 3 === 0 ? 3 : 5
-            height: width
-            color: index % 4 === 0 ? "#E8CE7A" : "#D4AF37"
-            opacity: 0
-
-            x: 30 + (index * 97) % Math.max(1, cardRoot.width - 60)
-            y: cardRoot.height * 0.15
-
-            SequentialAnimation {
-                running: cardRoot.visible
-
-                PauseAnimation {
-                    duration: 120 + index * 45
-                }
-                ParallelAnimation {
-                    NumberAnimation {
-                        target: foil
-                        property: "y"
-                        from: cardRoot.height * 0.15
-                        to: cardRoot.height * 0.9
-                        duration: foil.travelTime
-                        easing.type: Easing.OutQuad
-                    }
-                    NumberAnimation {
-                        target: foil
-                        property: "opacity"
-                        from: 0.85
-                        to: 0
-                        duration: foil.travelTime
-                    }
-                    NumberAnimation {
-                        target: foil
-                        property: "rotation"
-                        from: -30
-                        to: 210
-                        duration: foil.travelTime
-                    }
-                }
-            }
+            width: 6
+            height: 6
+            radius: 1
+            color: "#D4AF37"
         }
     }
 

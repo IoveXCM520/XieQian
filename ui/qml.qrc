@@ -11,5 +11,8 @@
         <file>qml/pages/HistoryPage.qml</file>
         <file>qml/pages/SettingsPage.qml</file>
         <file>qml/pages/AboutPage.qml</file>
+        <file>audio/click.wav</file>
+        <file>audio/spin.wav</file>
+        <file>audio/win.wav</file>
     </qresource>
 </RCC>

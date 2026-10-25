@@ -156,23 +156,6 @@ void BackendBridge::mockImportCsv()
     loadRosterFromCsv(file.fileName());
 }
 
-QVariantList BackendBridge::getParticipants()
-{
-    QVariantList participants;
-    for (std::size_t index = 0; index < roster_->size(); ++index) {
-        const xieqian::core::Participant &participant = roster_->at(index);
-
-        QVariantMap entry;
-        entry.insert(QStringLiteral("index"), static_cast<int>(index));
-        entry.insert(QStringLiteral("name"), QString::fromStdString(participant.name));
-        entry.insert(QStringLiteral("studentId"), QString::fromStdString(participant.studentId));
-        entry.insert(QStringLiteral("group"), QString::fromStdString(participant.group));
-        entry.insert(QStringLiteral("enabled"), participant.enabled);
-        participants.append(entry);
-    }
-    return participants;
-}
-
 QVariantList BackendBridge::getParticipantsWithStatus()
 {
     QVariantList participants;

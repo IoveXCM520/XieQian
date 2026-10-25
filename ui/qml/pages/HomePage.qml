@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 
 import "../components"
 
@@ -10,6 +11,11 @@ Item {
     property var winnerNames: []
 
     state: "idle"
+
+    function stopSpinSound() {
+        if (Window.window)
+            Window.window.stopSpin();
+    }
 
     states: [
         State {
@@ -82,6 +88,10 @@ Item {
             return;
 
         page.state = "spinning";
+        if (Window.window) {
+            Window.window.playClick();
+            Window.window.playSpin();
+        }
         flipCard.cardCount = Math.max(6, backendBridge.drawCount);
         blindBox.boxCount = Math.max(3, backendBridge.drawCount);
 
@@ -124,6 +134,7 @@ Item {
     }
 
     function showResult() {
+        page.stopSpinSound();
         page.state = "result";
         cardFadeIn.start();
     }
@@ -154,9 +165,16 @@ Item {
         easing.type: Easing.OutQuint
 
         onStopped: {
+            page.stopSpinSound();
             if (page.state === "spinning")
                 page.drawAndReveal();
         }
+    }
+
+    Shortcut {
+        sequence: "Space"
+        enabled: page.state === "idle" && page.visible && !drawSettings.visible
+        onActivated: page.startDraw()
     }
 
     OpacityAnimator {
@@ -314,7 +332,10 @@ Item {
                     }
                 }
 
-                onShuffleFinished: page.drawAndReveal()
+                onShuffleFinished: {
+                    page.stopSpinSound();
+                    page.drawAndReveal();
+                }
                 onRevealFinished: page.showResult()
             }
 
@@ -331,7 +352,10 @@ Item {
                     }
                 }
 
-                onSelectRequested: page.drawAndReveal()
+                onSelectRequested: {
+                    page.stopSpinSound();
+                    page.drawAndReveal();
+                }
                 onRevealFinished: page.showResult()
             }
         }

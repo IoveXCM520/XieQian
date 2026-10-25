@@ -20,6 +20,7 @@ jobs:
         host: 'windows'
         target: 'desktop'
         arch: 'win64_msvc2022_64'
+        modules: 'qtmultimedia'
 
     - name: Install Catch2
       run: |
