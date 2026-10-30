@@ -1,6 +1,7 @@
 <RCC>
     <qresource prefix="/ui">
         <file>qml/Main.qml</file>
+        <file>assets/app-icon-512.png</file>
         <file>qml/components/WheelItem.qml</file>
         <file>qml/components/FlipCardItem.qml</file>
         <file>qml/components/BlindBoxItem.qml</file>

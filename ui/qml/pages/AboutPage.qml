@@ -8,6 +8,19 @@ Item {
         anchors.centerIn: parent
         spacing: 16
 
+        Image {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: 128
+            Layout.preferredHeight: 128
+            source: "qrc:/ui/assets/app-icon-512.png"
+            sourceSize.width: 512
+            sourceSize.height: 512
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            mipmap: true
+            asynchronous: true
+        }
+
         Text {
             Layout.alignment: Qt.AlignHCenter
             text: "撷签 XieQian"
