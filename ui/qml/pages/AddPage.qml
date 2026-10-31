@@ -10,7 +10,7 @@ import "../components"
 /*!
     新建转盘页。
     - 白色圆角卡片表单，四周 32px 留白
-    - 动态选项列表：可增删选项（2–8 个）
+    - 动态选项列表：可增删选项（2–200 个）
     - “保存并生成”后进入结果预览，可直接前往抽奖页
 */
 Item {
@@ -21,7 +21,7 @@ Item {
     property var createdOptions: []
     property string errorMessage: ""
 
-    readonly property int maxOptions: 8
+    readonly property int maxOptions: 200
     readonly property int minOptions: 2
 
     // 持久化 / 商业化接入点：C++ 侧可连接此信号保存自定义转盘
@@ -49,8 +49,13 @@ Item {
 
         Qt.callLater(function() {
             var item = optionRepeater.itemAt(optionModel.count - 1)
-            if (item && item.field)
+            if (item && item.field) {
                 item.field.forceActiveFocus()
+                var pos = item.mapToItem(formFlick.contentItem, 0, 0)
+                var maxY = Math.max(0, formFlick.contentHeight - formFlick.height)
+                formFlick.contentY = Math.max(0, Math.min(maxY, pos.y + item.height + 24
+                                                         - formFlick.height))
+            }
         })
     }
 
@@ -224,7 +229,9 @@ Item {
                     boundsBehavior: Flickable.StopAtBounds
 
                     ScrollBar.vertical: ScrollBar {
-                        policy: ScrollBar.AlwaysOff
+                        policy: formFlick.contentHeight > formFlick.height
+                                ? ScrollBar.AsNeeded
+                                : ScrollBar.AlwaysOff
                     }
 
                     Column {

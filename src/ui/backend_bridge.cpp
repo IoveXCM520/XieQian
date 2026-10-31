@@ -22,7 +22,7 @@
 #include <QVariantMap>
 #include <QtConcurrentRun>
 
-#include "xieqian/core/io/csv_parser.h"
+#include "xieqian/core/io/file_parser.h"
 
 namespace {
 
@@ -253,19 +253,20 @@ void BackendBridge::updateDrawSettings(int count, int strategy)
     emit drawSettingsChanged();
 }
 
-void BackendBridge::loadRosterFromCsv(const QString &filePath)
+void BackendBridge::loadRosterFromFile(const QString &filePath)
 {
     startRosterParse(filePath, false);
 }
 
-void BackendBridge::openCsvFileDialog()
+void BackendBridge::openRosterFileDialog()
 {
     if (rosterLoading_) {
         return;
     }
 
-    const QString filePath = QFileDialog::getOpenFileName(nullptr, QStringLiteral("选择名单文件"), QString(),
-                                                          QStringLiteral("CSV Files (*.csv)"));
+    const QString filePath = QFileDialog::getOpenFileName(
+        nullptr, QStringLiteral("选择名单文件"), QString(),
+        QStringLiteral("名单文件 (*.csv *.txt);;CSV 文件 (*.csv);;文本文件 (*.txt)"));
     if (filePath.isEmpty()) {
         return;
     }
@@ -304,7 +305,7 @@ void BackendBridge::startRosterParse(const QString &filePath, bool removeFileAft
     const QString path = filePath;
     rosterWatcher_.setFuture(QtConcurrent::run([path, removeFileAfterParse]() -> std::shared_ptr<xieqian::core::Roster> {
         auto parsed = std::make_shared<xieqian::core::Roster>();
-        xieqian::core::CsvParser parser;
+        xieqian::core::FileParser parser;
         const bool ok = parser.parseFile(QFile::encodeName(path).toStdString(), *parsed);
         if (removeFileAfterParse) {
             QFile::remove(path);
@@ -373,11 +374,11 @@ void BackendBridge::updateParticipantWeight(const QString &id, double weight)
     }
 }
 
-void BackendBridge::saveCustomWheel(const QString &name, const QVariantList &options)
+bool BackendBridge::saveCustomWheel(const QString &name, const QVariantList &options)
 {
     const QString wheelName = name.trimmed();
     if (wheelName.isEmpty()) {
-        return;
+        return false;
     }
 
     QStringList wheelOptions;
@@ -389,7 +390,7 @@ void BackendBridge::saveCustomWheel(const QString &name, const QVariantList &opt
     }
 
     if (wheelOptions.size() < 2) {
-        return;
+        return false;
     }
 
     const auto existing = std::find_if(customWheels_.begin(), customWheels_.end(),
@@ -402,8 +403,26 @@ void BackendBridge::saveCustomWheel(const QString &name, const QVariantList &opt
         customWheels_.push_back(CustomWheel{wheelName, wheelOptions});
     }
 
+    activeWheelName_ = wheelName;
     saveState();
     emit customWheelsChanged();
+    return true;
+}
+
+QVariantMap BackendBridge::getCustomWheel()
+{
+    for (const CustomWheel &wheel : customWheels_) {
+        if (wheel.name != activeWheelName_) {
+            continue;
+        }
+
+        QVariantMap entry;
+        entry.insert(QStringLiteral("name"), wheel.name);
+        entry.insert(QStringLiteral("options"), wheel.options);
+        return entry;
+    }
+
+    return {};
 }
 
 QVariantList BackendBridge::customWheels() const
@@ -446,6 +465,7 @@ void BackendBridge::clearAllData()
     roster_->clear();
     history_.clear();
     customWheels_.clear();
+    activeWheelName_.clear();
     drawEngine_->clearDrawnHistory();
 
     saveState();
@@ -592,6 +612,7 @@ QJsonObject BackendBridge::stateToJson() const
     root.insert(QStringLiteral("roster"), roster);
     root.insert(QStringLiteral("history"), history);
     root.insert(QStringLiteral("customWheels"), customWheels);
+    root.insert(QStringLiteral("activeWheel"), activeWheelName_);
     root.insert(QStringLiteral("soundEnabled"), soundEnabled_);
     root.insert(QStringLiteral("motionEnabled"), motionEnabled_);
     return root;
@@ -645,6 +666,15 @@ void BackendBridge::applyData(const QJsonObject &root)
         if (options.size() >= 2) {
             customWheels_.push_back(CustomWheel{name, options});
         }
+    }
+
+    activeWheelName_ = root.value(QStringLiteral("activeWheel")).toString().trimmed();
+    const auto active = std::find_if(customWheels_.begin(), customWheels_.end(),
+                                     [this](const CustomWheel &wheel) {
+                                         return wheel.name == activeWheelName_;
+                                     });
+    if (active == customWheels_.end()) {
+        activeWheelName_ = customWheels_.empty() ? QString() : customWheels_.back().name;
     }
 
     soundEnabled_ = root.value(QStringLiteral("soundEnabled")).toBool(true);

@@ -8,6 +8,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVariantList>
+#include <QVariantMap>
 
 #include "ai_manager.h"
 #include "xieqian/core/draw/draw_engine.h"
@@ -40,13 +41,14 @@ public:
     Q_INVOKABLE QVariantList generateSeats();
     Q_INVOKABLE void applyMockRoster(const QVariantList &roster);
     Q_INVOKABLE void updateDrawSettings(int count, int strategy);
-    Q_INVOKABLE void loadRosterFromCsv(const QString &filePath);
-    Q_INVOKABLE void openCsvFileDialog();
+    Q_INVOKABLE void loadRosterFromFile(const QString &filePath);
+    Q_INVOKABLE void openRosterFileDialog();
     Q_INVOKABLE void mockImportCsv();
     Q_INVOKABLE QVariantList getParticipantsWithStatus();
     Q_INVOKABLE void toggleParticipantStatus(int index);
     Q_INVOKABLE void updateParticipantWeight(const QString &id, double weight);
-    Q_INVOKABLE void saveCustomWheel(const QString &name, const QVariantList &options);
+    Q_INVOKABLE bool saveCustomWheel(const QString &name, const QVariantList &options);
+    Q_INVOKABLE QVariantMap getCustomWheel();
     Q_INVOKABLE void resetDrawnHistory();
     Q_INVOKABLE QVariantList getHistory();
     Q_INVOKABLE void clearAllData();
@@ -112,6 +114,7 @@ private:
     std::unique_ptr<AiManager> aiManager_;
     std::vector<HistoryEntry> history_;
     std::vector<CustomWheel> customWheels_;
+    QString activeWheelName_;
     DrawMode currentDrawMode_ = DrawMode::Wheel;
     int drawCount_ = 1;
     xieqian::core::DrawStrategy drawStrategy_ = xieqian::core::DrawStrategy::Random;

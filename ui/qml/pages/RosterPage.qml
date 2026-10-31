@@ -8,7 +8,7 @@ import "../components"
 
 /*!
     名单管理页。
-    - CSV 导入 / AI 生成测试名单 / 重置抽取状态
+    - CSV / TXT 导入 / 重置抽取状态
     - 白色圆角卡片列表，隐藏滚动条
     - 首字母头像、姓名学号、权重胶囊、状态胶囊
 */
@@ -16,8 +16,6 @@ Item {
     id: page
 
     property var participants: []
-    property bool aiBusy: false
-    property string aiMessage: ""
 
     readonly property bool loading: backendBridge.rosterLoading
     readonly property int totalCount: backendBridge.rosterCount
@@ -60,15 +58,6 @@ Item {
         return Theme.successSoft
     }
 
-    function startAiRoster() {
-        if (aiBusy)
-            return
-
-        aiBusy = true
-        aiMessage = ""
-        backendBridge.aiManager.generateMockRoster()
-    }
-
     function openWeightDialog(item) {
         weightDialog.targetId = item.id
         weightDialog.targetName = item.name
@@ -92,27 +81,6 @@ Item {
         function onRosterLoadingChanged() {
             if (!backendBridge.rosterLoading)
                 page.refresh()
-        }
-    }
-
-    Connections {
-        target: backendBridge.aiManager
-        ignoreUnknownSignals: true
-
-        function onMockRosterReady(roster) {
-            page.aiBusy = false
-            page.aiMessage = ""
-            backendBridge.applyMockRoster(roster)
-        }
-
-        function onMockRosterFailed(message) {
-            page.aiBusy = false
-            page.aiMessage = message
-        }
-
-        function onNetworkError(message) {
-            page.aiBusy = false
-            page.aiMessage = message
         }
     }
 
@@ -145,7 +113,7 @@ Item {
                 }
 
                 Text {
-                    text: "导入班级名单，或让 AI 生成一份示例名单"
+                    text: "导入班级名单，CSV 与 TXT 都支持"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontBody
@@ -201,54 +169,17 @@ Item {
                 width: 124
                 height: 40
                 text: "重置抽取状态"
-                soft: false
                 enabled: page.totalCount > 0 && !page.loading
                 onClicked: backendBridge.resetDrawnHistory()
             }
 
             RosterButton {
-                width: 160
+                width: 130
                 height: 40
-                text: page.aiBusy ? "AI 生成中…" : "✨ AI 生成名单"
-                soft: true
-                enabled: !page.aiBusy && !page.loading
-                onClicked: page.startAiRoster()
-            }
-
-            RosterButton {
-                width: 142
-                height: 40
-                text: page.loading ? "正在解析…" : "导入 CSV"
+                text: page.loading ? "正在解析…" : "导入名单"
                 primary: true
                 enabled: !page.loading
-                onClicked: backendBridge.openCsvFileDialog()
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────
-        // AI 提示
-        // ─────────────────────────────────────────────────────────
-        Rectangle {
-            id: aiBanner
-            anchors.top: toolbar.bottom
-            anchors.topMargin: 10
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: visible ? 38 : 0
-            radius: 10
-            color: Theme.dangerSoft
-            visible: page.aiMessage.length > 0
-
-            Text {
-                anchors.fill: parent
-                anchors.leftMargin: 14
-                anchors.rightMargin: 14
-                text: page.aiMessage
-                color: Theme.danger
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontCaption
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideRight
+                onClicked: backendBridge.openRosterFileDialog()
             }
         }
 
@@ -258,7 +189,7 @@ Item {
         ListView {
             id: listView
 
-            anchors.top: page.aiMessage.length > 0 ? aiBanner.bottom : toolbar.bottom
+            anchors.top: toolbar.bottom
             anchors.topMargin: 16
             anchors.left: parent.left
             anchors.right: parent.right
@@ -478,7 +409,7 @@ Item {
 
                     Text {
                         width: parent.width
-                        text: "导入 CSV，或让 AI 生成一份示例名单"
+                        text: "导入 CSV 或 TXT 名单，开始抽取"
                         horizontalAlignment: Text.AlignHCenter
                         color: Theme.textSecondary
                         font.family: Theme.fontFamily
@@ -584,7 +515,6 @@ Item {
                         width: 92
                         height: 40
                         text: "取消"
-                        soft: false
                         onClicked: weightDialog.reject()
                     }
 
@@ -615,7 +545,6 @@ Item {
 
         property string text: ""
         property bool primary: false
-        property bool soft: false
         signal clicked()
 
         implicitWidth: 130
@@ -649,21 +578,15 @@ Item {
                 orientation: Gradient.Horizontal
                 GradientStop {
                     position: 0.0
-                    color: button.primary
-                           ? Theme.primary
-                           : (button.soft ? Theme.primarySoft : Theme.surface)
+                    color: button.primary ? Theme.primary : Theme.surface
                 }
                 GradientStop {
                     position: 1.0
-                    color: button.primary
-                           ? Theme.primaryEnd
-                           : (button.soft ? Theme.primarySoft : Theme.surface)
+                    color: button.primary ? Theme.primaryEnd : Theme.surface
                 }
             }
             border.width: button.primary ? 0 : 1
-            border.color: button.soft
-                          ? Theme.withAlpha(Theme.primary, 0.10)
-                          : Theme.border
+            border.color: Theme.border
         }
 
         Rectangle {

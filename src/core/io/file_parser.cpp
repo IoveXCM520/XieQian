@@ -1,8 +1,11 @@
-#include "xieqian/core/io/csv_parser.h"
+#include "xieqian/core/io/file_parser.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <utility>
 #include <vector>
@@ -39,6 +42,26 @@ std::vector<std::string> splitFields(const std::string &line)
     return fields;
 }
 
+std::vector<std::string> splitTokens(const std::string &line)
+{
+    std::vector<std::string> tokens;
+    std::string token;
+    for (const char ch : line) {
+        if (ch == ',' || std::isspace(static_cast<unsigned char>(ch)) != 0) {
+            if (!token.empty()) {
+                tokens.push_back(token);
+                token.clear();
+            }
+        } else {
+            token.push_back(ch);
+        }
+    }
+    if (!token.empty()) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
 void stripUtf8Bom(std::string &line)
 {
     const std::string bom = "\xEF\xBB\xBF";
@@ -61,9 +84,23 @@ double parseWeight(const std::string &value)
     return parsed;
 }
 
+bool hasCsvExtension(const std::string &filePath)
+{
+    std::string extension = std::filesystem::path(filePath).extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return extension == ".csv";
+}
+
+bool isHeaderLine(const std::string &line)
+{
+    return line.find("姓名") != std::string::npos;
+}
+
 }  // namespace
 
-bool CsvParser::parseFile(const std::string &filePath, Roster &roster)
+bool FileParser::parseFile(const std::string &filePath, Roster &roster)
 {
     lastError_.clear();
 
@@ -72,6 +109,8 @@ bool CsvParser::parseFile(const std::string &filePath, Roster &roster)
         lastError_ = "无法打开文件: " + filePath;
         return false;
     }
+
+    const bool csvMode = hasCsvExtension(filePath);
 
     std::vector<Participant> parsed;
     std::string line;
@@ -90,29 +129,38 @@ bool CsvParser::parseFile(const std::string &filePath, Roster &roster)
 
         if (!headerChecked) {
             headerChecked = true;
-            if (line.find("姓名") != std::string::npos) {
+            if (isHeaderLine(line)) {
                 continue;
             }
         }
 
-        const std::vector<std::string> fields = splitFields(line);
-        if (fields.empty() || fields[0].empty()) {
-            lastError_ = "第 " + std::to_string(lineNumber) + " 行缺少姓名";
-            return false;
+        if (csvMode) {
+            const std::vector<std::string> fields = splitFields(line);
+            if (fields.empty() || fields[0].empty()) {
+                lastError_ = "第 " + std::to_string(lineNumber) + " 行缺少姓名";
+                return false;
+            }
+
+            Participant participant;
+            participant.name = fields[0];
+            if (fields.size() > 1) {
+                participant.studentId = fields[1];
+            }
+            if (fields.size() > 2) {
+                participant.group = fields[2];
+            }
+            if (fields.size() > 3) {
+                participant.weight = parseWeight(fields[3]);
+            }
+            parsed.push_back(std::move(participant));
+            continue;
         }
 
-        Participant participant;
-        participant.name = fields[0];
-        if (fields.size() > 1) {
-            participant.studentId = fields[1];
+        for (const std::string &token : splitTokens(line)) {
+            Participant participant;
+            participant.name = token;
+            parsed.push_back(std::move(participant));
         }
-        if (fields.size() > 2) {
-            participant.group = fields[2];
-        }
-        if (fields.size() > 3) {
-            participant.weight = parseWeight(fields[3]);
-        }
-        parsed.push_back(std::move(participant));
     }
 
     roster.clear();
@@ -122,7 +170,7 @@ bool CsvParser::parseFile(const std::string &filePath, Roster &roster)
     return true;
 }
 
-const std::string &CsvParser::lastError() const
+const std::string &FileParser::lastError() const
 {
     return lastError_;
 }

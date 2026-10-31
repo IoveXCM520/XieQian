@@ -49,7 +49,7 @@ ApplicationWindow {
     }
 
     function navigate(page) {
-        var target = Math.max(0, Math.min(5, page))
+        var target = Math.max(0, Math.min(6, page))
         if (target === currentPage && pageStack.currentIndex === target
                 && !pageSwitch.running)
             return
@@ -211,20 +211,18 @@ ApplicationWindow {
             color: Theme.surface
             z: 10
 
-            NavItem {
+            Column {
                 anchors.top: parent.top
                 anchors.topMargin: 16
                 anchors.horizontalCenter: parent.horizontalCenter
-                iconKind: 6
-                label: "主页"
-                selected: window.currentPage === 0
-                onTriggered: window.navigate(0)
-            }
+                spacing: 8
 
-            Column {
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: 4
+                NavItem {
+                    iconKind: 6
+                    label: "主页"
+                    selected: window.currentPage === 0
+                    onTriggered: window.navigate(0)
+                }
 
                 NavItem {
                     iconKind: 5
@@ -255,14 +253,25 @@ ApplicationWindow {
                 }
             }
 
-            NavItem {
+            Column {
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 16
                 anchors.horizontalCenter: parent.horizontalCenter
-                iconKind: 4
-                label: "设置"
-                selected: window.currentPage === 5
-                onTriggered: window.navigate(5)
+                spacing: 8
+
+                NavItem {
+                    iconKind: 7
+                    label: "关于"
+                    selected: window.currentPage === 5
+                    onTriggered: window.navigate(5)
+                }
+
+                NavItem {
+                    iconKind: 4
+                    label: "设置"
+                    selected: window.currentPage === 6
+                    onTriggered: window.navigate(6)
+                }
             }
         }
 
@@ -300,14 +309,15 @@ ApplicationWindow {
                         id: addPage
 
                         onWheelCreated: function(name, options) {
-                            backendBridge.saveCustomWheel(name, options)
-                            homePage.activateWheel(name)
+                            if (backendBridge.saveCustomWheel(name, options))
+                                homePage.activateWheel(name)
                         }
                     }
 
                     RosterPage {}
                     HistoryPage {}
                     ToolsPage {}
+                    AboutPage {}
                     SettingsPage {}
                 }
             }
@@ -475,10 +485,37 @@ ApplicationWindow {
             clip: true
 
             Canvas {
+                id: splashBackdrop
                 anchors.fill: parent
+
+                // 固定种子生成，窗口缩放时粒子位置不会抽动
+                property var particles: []
+
+                function seedParticles() {
+                    var seed = 20260301
+                    var list = []
+                    for (var i = 0; i < 56; ++i) {
+                        seed = (seed * 1103515245 + 12345) % 2147483648
+                        var x = (seed % 10000) / 10000
+                        seed = (seed * 1103515245 + 12345) % 2147483648
+                        var y = (seed % 10000) / 10000
+                        seed = (seed * 1103515245 + 12345) % 2147483648
+                        var radius = 0.7 + ((seed % 10000) / 10000) * 2.0
+                        seed = (seed * 1103515245 + 12345) % 2147483648
+                        var alpha = 0.02 + ((seed % 10000) / 10000) * 0.055
+                        list.push({ "x": x, "y": y, "r": radius,
+                                    "a": alpha, "green": (i % 4 === 0) })
+                    }
+                    particles = list
+                }
+
+                Component.onCompleted: {
+                    seedParticles()
+                    requestPaint()
+                }
+
                 onWidthChanged: requestPaint()
                 onHeightChanged: requestPaint()
-                Component.onCompleted: requestPaint()
 
                 onPaint: {
                     if (width <= 0 || height <= 0)
@@ -497,6 +534,16 @@ ApplicationWindow {
                     glow.addColorStop(1, "rgba(59,139,246,0)")
                     ctx.fillStyle = glow
                     ctx.fillRect(0, 0, width, height)
+
+                    for (var i = 0; i < particles.length; ++i) {
+                        var p = particles[i]
+                        ctx.beginPath()
+                        ctx.arc(p.x * width, p.y * height, p.r, 0, Math.PI * 2)
+                        ctx.fillStyle = p.green
+                                        ? "rgba(46,212,165," + p.a + ")"
+                                        : "rgba(59,139,246," + p.a + ")"
+                        ctx.fill()
+                    }
                 }
             }
 
@@ -507,63 +554,31 @@ ApplicationWindow {
 
                 Item {
                     width: parent.width
-                    height: 160
+                    height: 168
 
-                    Item {
-                        id: logoBlock
-                        width: 160
-                        height: 160
+                    Image {
+                        id: splashLogo
                         anchors.centerIn: parent
-                        scale: 0.92
+                        width: 152
+                        height: 152
+                        source: "qrc:/ui/assets/app-icon-512.png"
+                        sourceSize.width: 512
+                        sourceSize.height: 512
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        mipmap: true
                         opacity: 0.0
-
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: 200
-                            height: 200
-                            radius: 64
-                            color: Theme.withAlpha(Theme.primary, 0.08)
-                        }
-
-                        Rectangle {
-                            id: logoPlate
-                            anchors.fill: parent
-                            radius: 38
-                            gradient: Theme.primaryGradientVertical
-                            border.width: 1
-                            border.color: Theme.withAlpha(Theme.white, 0.35)
-                            clip: true
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "签"
-                                color: Theme.white
-                                font.family: Theme.fontFamily
-                                font.pixelSize: 68
-                                font.weight: Font.Bold
-                                visible: logoImage.status !== Image.Ready
-                            }
-
-                            Image {
-                                id: logoImage
-                                anchors.fill: parent
-                                source: "qrc:/ui/assets/app-icon-512.png"
-                                fillMode: Image.PreserveAspectFit
-                                sourceSize.width: 320
-                                sourceSize.height: 320
-                                smooth: true
-                                mipmap: true
-                                visible: status === Image.Ready
-                            }
-                        }
+                        scale: 0.96
                     }
                 }
 
                 Item { width: 1; height: 20 }
 
                 Text {
+                    id: splashTitle
                     width: parent.width
                     text: "撷签"
+                    opacity: 0.0
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textPrimary
                     font.family: Theme.fontFamily
@@ -575,8 +590,10 @@ ApplicationWindow {
                 Item { width: 1; height: 6 }
 
                 Text {
+                    id: splashSubtitle
                     width: parent.width
                     text: "XIE QIAN"
+                    opacity: 0.0
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
@@ -587,8 +604,10 @@ ApplicationWindow {
                 Item { width: 1; height: 14 }
 
                 Text {
+                    id: splashTagline
                     width: parent.width
                     text: "让每一次选择，都值得期待"
+                    opacity: 0.0
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
@@ -622,8 +641,10 @@ ApplicationWindow {
                 Item { width: 1; height: 14 }
 
                 Text {
+                    id: splashStatus
                     width: parent.width
                     text: "正在准备签盘"
+                    opacity: 0.0
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textTertiary
                     font.family: Theme.fontFamily
@@ -642,25 +663,61 @@ ApplicationWindow {
             }
         }
 
-        ParallelAnimation {
+        SequentialAnimation {
             id: splashIntro
             running: true
 
-            NumberAnimation {
-                target: logoBlock
-                property: "scale"
-                from: 0.92
-                to: 1.0
-                duration: 680
-                easing.type: Easing.OutBack
+            PauseAnimation { duration: 100 }
+
+            ParallelAnimation {
+                NumberAnimation {
+                    target: splashLogo
+                    property: "opacity"
+                    to: 1.0
+                    duration: 620
+                    easing.type: Easing.OutCubic
+                }
+
+                NumberAnimation {
+                    target: splashLogo
+                    property: "scale"
+                    to: 1.0
+                    duration: 760
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            ParallelAnimation {
+                NumberAnimation {
+                    target: splashTitle
+                    property: "opacity"
+                    to: 1.0
+                    duration: 300
+                    easing.type: Easing.OutCubic
+                }
+
+                NumberAnimation {
+                    target: splashSubtitle
+                    property: "opacity"
+                    to: 1.0
+                    duration: 340
+                    easing.type: Easing.OutCubic
+                }
+
+                NumberAnimation {
+                    target: splashTagline
+                    property: "opacity"
+                    to: 1.0
+                    duration: 380
+                    easing.type: Easing.OutCubic
+                }
             }
 
             NumberAnimation {
-                target: logoBlock
+                target: splashStatus
                 property: "opacity"
-                from: 0.0
                 to: 1.0
-                duration: 520
+                duration: 240
                 easing.type: Easing.OutCubic
             }
         }
@@ -837,6 +894,20 @@ ApplicationWindow {
                 ctx.lineTo(5.9, 17.6)
                 ctx.lineTo(16.1, 17.6)
                 ctx.lineTo(16.1, 9.8)
+                ctx.stroke()
+            } else if (kind === 7) {
+                // 圆圈 + 圆点 + 竖线，用于「关于」导航项
+                ctx.beginPath()
+                ctx.arc(cx, cy, 8.1, 0, Math.PI * 2)
+                ctx.stroke()
+
+                ctx.beginPath()
+                ctx.arc(cx, cy - 4.3, 1.25, 0, Math.PI * 2)
+                ctx.fill()
+
+                ctx.beginPath()
+                ctx.moveTo(cx, cy - 1.2)
+                ctx.lineTo(cx, cy + 4.7)
                 ctx.stroke()
             }
         }

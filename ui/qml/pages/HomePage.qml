@@ -19,6 +19,7 @@ Item {
     property int selectedWheel: 0
     property var rosterOptions: []
     property int pendingCustomIndex: -1
+    property string pendingWheelName: ""
 
     // 第 0 项固定为名单转盘，其余为持久化的自定义转盘
     readonly property var wheelChoices: {
@@ -70,12 +71,25 @@ Item {
     }
 
     function activateWheel(name) {
+        pendingWheelName = ""
         for (var i = 1; i < wheelChoices.length; ++i) {
             if (wheelChoices[i].name === name) {
                 selectedWheel = i
                 return
             }
         }
+        // 刚保存的转盘可能还没进入 wheelChoices，记下名称等绑定刷新后再选
+        pendingWheelName = name
+    }
+
+    onWheelChoicesChanged: {
+        if (pendingWheelName.length === 0) {
+            if (selectedWheel >= wheelChoices.length)
+                selectedWheel = 0
+            return
+        }
+
+        activateWheel(pendingWheelName)
     }
 
     function startDraw() {
@@ -179,7 +193,13 @@ Item {
         }
     }
 
-    Component.onCompleted: refreshRosterOptions()
+    Component.onCompleted: {
+        refreshRosterOptions()
+
+        var saved = backendBridge.getCustomWheel()
+        if (saved && saved.name !== undefined && String(saved.name).length > 0)
+            activateWheel(String(saved.name))
+    }
 
     // ─────────────────────────────────────────────────────────────
     // 页面布局
