@@ -1,308 +1,510 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Window
-import QtQuick.Particles
+import QtQuick.Effects
 
+import ".."
+
+/*!
+    中奖贺卡。
+    - 全屏半透明遮罩 + 白色大圆角弹窗
+    - 单人中奖大字号渐变姓名；多人中奖网格排列
+    - AI 点评按钮与文本展示
+    - “关闭”与“继续抽奖”两个动作
+*/
 Item {
-    id: cardRoot
+    id: resultCard
+
+    anchors.fill: parent
+    z: 1000
 
     property var winnerNames: []
-    readonly property bool multi: winnerNames.length > 1
-    readonly property int columns: winnerNames.length <= 4 ? 2 : 3
-    readonly property int rows: multi ? Math.ceil(winnerNames.length / columns) : 1
-
+    property bool opened: false
     property bool aiBusy: false
     property string aiSpeech: ""
     property string aiError: ""
-    property real speechOpacity: 0
-    readonly property string awardWinnerName: winnerNames.length > 0 ? winnerNames[0] : ""
 
+    readonly property bool multi: winnerNames.length > 1
+    readonly property int columns: winnerNames.length <= 4 ? 2 : 3
+    readonly property int rows: multi ? Math.ceil(winnerNames.length / columns) : 1
+    readonly property string firstWinner: winnerNames.length > 0 ? winnerNames[0] : ""
+
+    opacity: opened ? 1.0 : 0.0
+    visible: opacity > 0.001
+    focus: opened
+
+    signal closeRequested()
     signal continueRequested()
 
+    Behavior on opacity {
+        NumberAnimation {
+            duration: Theme.durationNormal
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    function open(names) {
+        var list = []
+        if (names !== undefined && names !== null) {
+            for (var i = 0; i < names.length; ++i) {
+                var name = String(names[i])
+                if (name.length > 0)
+                    list.push(name)
+            }
+        }
+
+        winnerNames = list
+        aiBusy = false
+        aiSpeech = ""
+        aiError = ""
+        opened = true
+    }
+
+    function close() {
+        if (!opened)
+            return
+        opened = false
+        closeRequested()
+    }
+
+    function continueDrawing() {
+        if (!opened)
+            return
+        opened = false
+        continueRequested()
+    }
+
     function requestAiSpeech() {
-        if (cardRoot.aiBusy || cardRoot.awardWinnerName.length === 0)
-            return;
+        if (aiBusy || firstWinner.length === 0)
+            return
 
-        cardRoot.aiBusy = true;
-        cardRoot.aiError = "";
-        backendBridge.aiManager.generateAwardSpeech(cardRoot.awardWinnerName);
-    }
+        aiBusy = true
+        aiError = ""
 
-    onVisibleChanged: {
-        if (cardRoot.visible) {
-            if (Window.window)
-                Window.window.playWin();
+        if (typeof backendBridge !== "undefined" && backendBridge
+                && backendBridge.aiManager) {
+            backendBridge.aiManager.generateAwardSpeech(firstWinner)
         } else {
-            cardRoot.aiBusy = false;
-            cardRoot.aiSpeech = "";
-            cardRoot.aiError = "";
-            cardRoot.speechOpacity = 0;
+            aiBusy = false
+            aiError = "AI 服务暂不可用"
         }
     }
 
-    Connections {
-        target: backendBridge.aiManager
-
-        function onAwardSpeechReady(speech) {
-            if (!cardRoot.visible)
-                return;
-            cardRoot.aiBusy = false;
-            cardRoot.aiSpeech = speech;
-            speechFadeIn.start();
-        }
-
-        function onAwardSpeechFailed(message) {
-            if (!cardRoot.visible)
-                return;
-            cardRoot.aiBusy = false;
-            cardRoot.aiError = message;
-        }
-
-        function onNetworkError(message) {
-            if (!cardRoot.visible)
-                return;
-            cardRoot.aiBusy = false;
-            cardRoot.aiError = message;
+    onOpenedChanged: {
+        if (!opened) {
+            aiBusy = false
         }
     }
 
-    NumberAnimation {
-        id: speechFadeIn
+    Keys.onEscapePressed: resultCard.close()
 
-        target: cardRoot
-        property: "speechOpacity"
-        from: 0
-        to: 1
-        duration: 420
-        easing.type: Easing.OutCubic
-    }
-
+    // 全屏遮罩
     Rectangle {
         anchors.fill: parent
-        color: "#F8F6F0"
-        opacity: 0.72
-    }
+        color: Theme.overlay
 
-    // 金箔粒子：贺卡展示期间从顶部持续散落
-    ParticleSystem {
-        id: foil
-
-        anchors.fill: parent
-        z: 1
-        running: cardRoot.visible
-    }
-
-    Emitter {
-        system: foil
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: 1
-        emitRate: cardRoot.multi ? 36 : 26
-        maximumEmitted: cardRoot.multi ? 60 : 40
-        lifeSpan: 2600
-        lifeSpanVariation: 800
-        size: 10
-        sizeVariation: 5
-
-        velocity: AngleDirection {
-            angle: 90
-            angleVariation: 20
-            magnitude: 90
-            magnitudeVariation: 45
-        }
-
-        acceleration: PointDirection {
-            y: 35
-            yVariation: 10
+        MouseArea {
+            anchors.fill: parent
+            onClicked: resultCard.close()
         }
     }
 
-    ItemParticle {
-        system: foil
-        fade: true
-
-        delegate: Rectangle {
-            width: 6
-            height: 6
-            radius: 1
-            color: "#D4AF37"
-        }
-    }
-
+    // 贺卡
     Rectangle {
         id: card
 
         anchors.centerIn: parent
-        width: cardRoot.multi ? Math.min(760, cardRoot.width - 80) : Math.min(520, cardRoot.width - 80)
-        height: cardRoot.multi ? Math.max(300, 170 + cardRoot.rows * 56) : 340
-        radius: 2
-        color: "#FBF9F4"
-        border.width: 1
-        border.color: "#D4AF37"
+        width: resultCard.multi
+               ? Math.min(780, resultCard.width - 80)
+               : Math.min(540, resultCard.width - 80)
+        height: Math.min(resultCard.height - 32,
+                         resultCard.multi ? 420 + resultCard.rows * 56 : 500)
+        radius: Theme.radiusDialog
+        color: Theme.surface
+        scale: resultCard.opened ? 1.0 : 0.96
 
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            shadowEnabled: true
+            shadowColor: Theme.withAlpha(Theme.textPrimary, 0.22)
+            shadowBlur: 0.75
+            shadowVerticalOffset: 18
+            shadowHorizontalOffset: 0
+            autoPaddingEnabled: true
+        }
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: 320
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {}
+        }
+
+        // 顶部标题
         Text {
             id: titleText
 
             anchors.top: parent.top
             anchors.topMargin: 28
             anchors.horizontalCenter: parent.horizontalCenter
-            text: cardRoot.multi ? "共 " + cardRoot.winnerNames.length + " 位 中 签" : "恭 喜 中 签"
-            color: "#D4AF37"
-            font.pixelSize: 16
-            font.letterSpacing: 6
+            text: resultCard.multi
+                  ? "共 " + resultCard.winnerNames.length + " 位中签"
+                  : "恭 喜 中 签"
+            color: Theme.primary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontMicro
+            font.letterSpacing: 4
         }
 
-        Rectangle {
-            id: divider
-
-            anchors.top: titleText.bottom
-            anchors.topMargin: 12
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: 150
-            height: 1
-            color: "#E3D3A3"
-        }
-
-        Text {
-            id: winnerNameText
-
-            anchors.top: divider.bottom
-            anchors.topMargin: 28
-            anchors.horizontalCenter: parent.horizontalCenter
-            visible: !cardRoot.multi
-            text: cardRoot.winnerNames.length > 0 ? cardRoot.winnerNames[0] : ""
-            color: "#2D3E50"
-            font.pixelSize: 56
-            font.letterSpacing: 8
-        }
-
-        Button {
-            id: aiButton
-
-            anchors.top: winnerNameText.bottom
-            anchors.topMargin: 12
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: 170
+        // 关闭按钮
+        Item {
+            width: 32
             height: 32
-            visible: !cardRoot.multi && cardRoot.aiSpeech.length === 0
-            enabled: !cardRoot.aiBusy
-            text: cardRoot.aiBusy ? "思考中..." : "✨ 获取 AI 点评"
-            scale: aiButton.pressed ? 0.95 : 1.0
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.topMargin: 18
+            anchors.rightMargin: 18
 
-            Behavior on scale {
-                NumberAnimation {
-                    duration: 120
-                    easing.type: Easing.OutCubic
-                }
-            }
+            Rectangle {
+                anchors.fill: parent
+                radius: 16
+                color: closeMouse.containsMouse ? Theme.surfaceAlt : Theme.transparent
 
-            onClicked: cardRoot.requestAiSpeech()
-
-            background: Rectangle {
-                radius: 2
-                color: aiButton.hovered && aiButton.enabled ? "#F3E9D2" : "transparent"
-                border.width: 1
-                border.color: aiButton.enabled ? "#D4AF37" : "#C9C2B2"
-            }
-
-            contentItem: Text {
-                text: aiButton.text
-                color: aiButton.enabled ? "#8C6B1F" : "#A4A094"
-                font.pixelSize: 13
-                font.letterSpacing: 1
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-        }
-
-        Text {
-            id: speechText
-
-            anchors.top: aiButton.bottom
-            anchors.topMargin: 8
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: parent.width - 80
-            text: cardRoot.aiSpeech
-            visible: cardRoot.speechOpacity > 0.001
-            opacity: cardRoot.speechOpacity
-            color: "#3F5A4E"
-            font.pixelSize: 14
-            lineHeight: 1.25
-            wrapMode: Text.Wrap
-            horizontalAlignment: Text.AlignHCenter
-        }
-
-        Text {
-            anchors.top: aiButton.bottom
-            anchors.topMargin: 8
-            anchors.horizontalCenter: parent.horizontalCenter
-            visible: cardRoot.aiError.length > 0 && !cardRoot.multi
-            text: cardRoot.aiError
-            color: "#B4543F"
-            font.pixelSize: 12
-        }
-
-        Grid {
-            anchors.top: divider.bottom
-            anchors.topMargin: 20
-            anchors.horizontalCenter: parent.horizontalCenter
-            visible: cardRoot.multi
-            columns: cardRoot.columns
-            spacing: 12
-
-            Repeater {
-                model: cardRoot.winnerNames.length
-
-                delegate: Rectangle {
-                    width: 150
-                    height: 44
-                    radius: 2
-                    color: "#F8F6F0"
-                    border.width: 1
-                    border.color: "#E1D8C6"
-
-                    Text {
-                        anchors.centerIn: parent
-                        width: parent.width - 16
-                        text: cardRoot.winnerNames[index]
-                        color: "#2D3E50"
-                        font.pixelSize: 22
-                        font.letterSpacing: 2
-                        horizontalAlignment: Text.AlignHCenter
-                        elide: Text.ElideRight
+                Behavior on color {
+                    ColorAnimation {
+                        duration: Theme.durationFast
+                        easing.type: Easing.OutCubic
                     }
                 }
             }
-        }
 
-        Button {
-            id: continueButton
-
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 28
-
-            width: 160
-            height: 44
-            text: "继 续"
-
-            onClicked: cardRoot.continueRequested()
-
-            background: Rectangle {
-                radius: 2
-                color: "transparent"
-                border.width: 1
-                border.color: continueButton.hovered ? "#2D3E50" : "#D4AF37"
+            Text {
+                anchors.centerIn: parent
+                text: "×"
+                color: closeMouse.containsMouse ? Theme.textPrimary : Theme.textSecondary
+                font.family: Theme.fontFamily
+                font.pixelSize: 20
             }
 
-            contentItem: Text {
-                text: continueButton.text
-                color: "#2D3E50"
-                font.pixelSize: 16
-                font.letterSpacing: 4
+            MouseArea {
+                id: closeMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: resultCard.close()
+            }
+        }
+
+        Column {
+            id: bodyColumn
+
+            anchors.top: titleText.bottom
+            anchors.topMargin: 18
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: 34
+            anchors.rightMargin: 34
+            spacing: 14
+
+            // 单人：大字号渐变姓名
+            GradientName {
+                width: parent.width
+                height: resultCard.multi ? 0 : 84
+                visible: !resultCard.multi
+                text: resultCard.firstWinner
+                fontPixelSize: 56
+            }
+
+            // 多人：网格姓名
+            Item {
+                width: parent.width
+                height: resultCard.multi ? winnerGrid.height + 4 : 0
+                visible: resultCard.multi
+
+                Grid {
+                    id: winnerGrid
+
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    columns: resultCard.columns
+                    spacing: 8
+
+                    Repeater {
+                        model: resultCard.winnerNames
+
+                        delegate: Rectangle {
+                            width: 150
+                            height: 40
+                            radius: 12
+                            color: Theme.surfaceAlt
+                            border.width: 1
+                            border.color: Theme.withAlpha(Theme.primary, 0.10)
+
+                            GradientName {
+                                anchors.fill: parent
+                                text: modelData
+                                fontPixelSize: 22
+                            }
+                        }
+                    }
+                }
+            }
+
+            Text {
+                width: parent.width
+                text: resultCard.multi
+                      ? "愿这份好签，落到每一位幸运的人身上"
+                      : "愿这份好签，带来课堂里的小小惊喜"
+                color: Theme.textSecondary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontCaption
                 horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
+            }
+
+            Item {
+                width: parent.width
+                height: 44
+
+                CardButton {
+                    anchors.centerIn: parent
+                    width: 190
+                    height: 40
+                    primary: false
+                    text: resultCard.aiBusy ? "AI 正在思考…" : "✨ 获取 AI 点评"
+                    enabled: !resultCard.aiBusy && resultCard.firstWinner.length > 0
+                    onClicked: resultCard.requestAiSpeech()
+                }
+            }
+
+            Rectangle {
+                width: parent.width
+                height: 64
+                radius: 12
+                color: Theme.surfaceAlt
+                visible: resultCard.aiBusy
+                         || resultCard.aiSpeech.length > 0
+                         || resultCard.aiError.length > 0
+
+                Text {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    text: resultCard.aiBusy
+                          ? "AI 正在为这次中签写一句颁奖词…"
+                          : (resultCard.aiError.length > 0
+                             ? resultCard.aiError
+                             : resultCard.aiSpeech)
+                    color: resultCard.aiError.length > 0
+                           ? Theme.danger
+                           : (resultCard.aiBusy ? Theme.textSecondary : Theme.textPrimary)
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontBody
+                    wrapMode: Text.WordWrap
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+        }
+
+        // 底部动作
+        Row {
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.rightMargin: 34
+            anchors.bottomMargin: 28
+            spacing: 12
+
+            CardButton {
+                width: 116
+                height: 44
+                text: "关闭"
+                primary: false
+                onClicked: resultCard.close()
+            }
+
+            CardButton {
+                width: 150
+                height: 44
+                text: "继续抽奖"
+                primary: true
+                onClicked: resultCard.continueDrawing()
+            }
+        }
+    }
+
+    Connections {
+        target: backendBridge.aiManager
+        ignoreUnknownSignals: true
+
+        function onAwardSpeechReady(speech) {
+            if (!resultCard.opened)
+                return
+            resultCard.aiBusy = false
+            resultCard.aiSpeech = speech
+        }
+
+        function onAwardSpeechFailed(message) {
+            if (!resultCard.opened)
+                return
+            resultCard.aiBusy = false
+            resultCard.aiError = message
+        }
+
+        function onNetworkError(message) {
+            if (!resultCard.opened)
+                return
+            resultCard.aiBusy = false
+            resultCard.aiError = message
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 渐变文字
+    // ─────────────────────────────────────────────────────────────
+    component GradientName: Canvas {
+        id: gradientName
+
+        property string text: ""
+        property int fontPixelSize: 40
+        property color startColor: Theme.primary
+        property color endColor: Theme.primaryEnd
+
+        onTextChanged: requestPaint()
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        onFontPixelSizeChanged: requestPaint()
+        onStartColorChanged: requestPaint()
+        onEndColorChanged: requestPaint()
+        Component.onCompleted: requestPaint()
+
+        onPaint: {
+            if (width <= 0 || height <= 0 || text.length === 0)
+                return
+
+            var ctx = getContext("2d")
+            ctx.clearRect(0, 0, width, height)
+
+            var size = fontPixelSize
+            var family = Theme.fontFamily
+            var font = "bold " + size + "px '" + family + "'"
+            ctx.font = font
+
+            while (ctx.measureText(text).width > width - 12 && size > 12) {
+                size -= 2
+                ctx.font = "bold " + size + "px '" + family + "'"
+            }
+
+            var gradient = ctx.createLinearGradient(0, 0, width, 0)
+            gradient.addColorStop(0, String(startColor))
+            gradient.addColorStop(1, String(endColor))
+
+            ctx.fillStyle = gradient
+            ctx.textAlign = "center"
+            ctx.textBaseline = "middle"
+            ctx.fillText(text, width / 2, height / 2 + 1)
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 贺卡按钮
+    // ─────────────────────────────────────────────────────────────
+    component CardButton: Item {
+        id: button
+
+        property string text: ""
+        property bool primary: true
+        signal clicked()
+
+        implicitWidth: 140
+        implicitHeight: 44
+        width: 140
+        height: 44
+        enabled: true
+        opacity: enabled ? 1.0 : 0.45
+        scale: mouse.pressed && enabled
+               ? 0.95
+               : (mouse.containsMouse && enabled ? 1.02 : 1.0)
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: Theme.transparent
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop {
+                    position: 0.0
+                    color: button.primary ? Theme.primary : Theme.surface
+                }
+                GradientStop {
+                    position: 1.0
+                    color: button.primary ? Theme.primaryEnd : Theme.surface
+                }
+            }
+            border.width: 1
+            border.color: button.primary
+                          ? Theme.withAlpha(Theme.white, 0.18)
+                          : Theme.border
+
+            layer.enabled: button.primary
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: Theme.withAlpha(Theme.primary, 0.22)
+                shadowBlur: 0.55
+                shadowVerticalOffset: 6
+                shadowHorizontalOffset: 0
+                autoPaddingEnabled: true
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: button.primary ? Theme.white : Theme.primarySoft
+            opacity: mouse.containsMouse && button.enabled
+                     ? (button.primary ? 0.10 : 0.45)
+                     : 0.0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        Text {
+            anchors.centerIn: parent
+            text: button.text
+            color: button.primary ? Theme.white : Theme.primary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontBody
+            font.weight: Font.DemiBold
+            font.letterSpacing: 1
+        }
+
+        MouseArea {
+            id: mouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: button.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: {
+                if (button.enabled)
+                    button.clicked()
             }
         }
     }

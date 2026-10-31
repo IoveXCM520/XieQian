@@ -2,6 +2,14 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+import ".."
+
+/*!
+    名单管理页。
+    - CSV 导入 / AI 生成测试名单 / 重置抽取状态
+    - 白色圆角卡片列表，隐藏滚动条
+    - 首字母头像、姓名学号、权重胶囊、状态胶囊
+*/
 Item {
     id: page
 
@@ -9,21 +17,61 @@ Item {
     property bool aiBusy: false
     property string aiMessage: ""
 
+    readonly property bool loading: backendBridge.rosterLoading
+    readonly property int totalCount: backendBridge.rosterCount
+
     function refresh() {
-        participants = backendBridge.getParticipantsWithStatus();
+        participants = backendBridge.getParticipantsWithStatus()
+    }
+
+    function initialOf(name) {
+        if (!name || name.length === 0)
+            return "?"
+        return name.charAt(0)
     }
 
     function weightLabel(value) {
-        return "x" + Number(value).toFixed(1);
+        return "x" + Number(value).toFixed(1)
+    }
+
+    function statusText(item) {
+        if (!item.enabled)
+            return "已停用"
+        if (item.isDrawn)
+            return "已抽中"
+        return "可抽取"
+    }
+
+    function statusColor(item) {
+        if (!item.enabled)
+            return Theme.textTertiary
+        if (item.isDrawn)
+            return Theme.primary
+        return Theme.success
+    }
+
+    function statusBackground(item) {
+        if (!item.enabled)
+            return Theme.surfaceAlt
+        if (item.isDrawn)
+            return Theme.primarySoft
+        return Theme.successSoft
     }
 
     function startAiRoster() {
-        if (page.aiBusy)
-            return;
+        if (aiBusy)
+            return
 
-        page.aiBusy = true;
-        page.aiMessage = "";
-        backendBridge.aiManager.generateMockRoster();
+        aiBusy = true
+        aiMessage = ""
+        backendBridge.aiManager.generateMockRoster()
+    }
+
+    function openWeightDialog(item) {
+        weightDialog.targetId = item.id
+        weightDialog.targetName = item.name
+        weightField.text = item.weight.toString()
+        weightDialog.open()
     }
 
     Component.onCompleted: refresh()
@@ -32,334 +80,454 @@ Item {
         target: backendBridge
 
         function onRosterUpdated() {
-            page.refresh();
+            page.refresh()
         }
 
         function onHistoryUpdated() {
-            page.refresh();
+            page.refresh()
+        }
+
+        function onRosterLoadingChanged() {
+            if (!backendBridge.rosterLoading)
+                page.refresh()
         }
     }
 
     Connections {
         target: backendBridge.aiManager
+        ignoreUnknownSignals: true
 
         function onMockRosterReady(roster) {
-            page.aiBusy = false;
-            backendBridge.applyMockRoster(roster);
+            page.aiBusy = false
+            page.aiMessage = ""
+            backendBridge.applyMockRoster(roster)
         }
 
         function onMockRosterFailed(message) {
-            page.aiBusy = false;
-            page.aiMessage = message;
+            page.aiBusy = false
+            page.aiMessage = message
         }
 
         function onNetworkError(message) {
-            page.aiBusy = false;
-            page.aiMessage = message;
+            page.aiBusy = false
+            page.aiMessage = message
         }
     }
 
-    ColumnLayout {
+    Item {
+        id: pageContent
         anchors.fill: parent
-        anchors.margins: 40
-        spacing: 20
+        anchors.margins: Theme.pagePadding
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 16
+        // ─────────────────────────────────────────────────────────
+        // 标题
+        // ─────────────────────────────────────────────────────────
+        Item {
+            id: header
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 64
 
-            Text {
-                Layout.fillWidth: true
-                text: "名单管理"
-                color: "#2D3E50"
-                font.pixelSize: 28
-                font.letterSpacing: 4
-            }
+            Column {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 4
 
-            Text {
-                text: backendBridge.rosterCount + " 人"
-                color: "#3F5A4E"
-                font.pixelSize: 14
-            }
-
-            Button {
-                id: resetButton
-
-                implicitWidth: 140
-                implicitHeight: 40
-                text: "重置防连抽"
-                enabled: backendBridge.rosterCount > 0
-
-                onClicked: backendBridge.resetDrawnHistory()
-
-                background: Rectangle {
-                    radius: 2
-                    color: "transparent"
-                    border.width: 1
-                    border.color: resetButton.hovered ? "#2D3E50" : "#C9C2B2"
+                Text {
+                    text: "名单管理"
+                    color: Theme.textPrimary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontH0
+                    font.weight: Font.Bold
                 }
 
-                contentItem: Text {
-                    text: resetButton.text
-                    color: resetButton.enabled ? "#3F5A4E" : "#A4B0BE"
-                    font.pixelSize: 14
-                    font.letterSpacing: 2
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                Text {
+                    text: "导入班级名单，或让 AI 生成一份示例名单"
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
                 }
             }
 
-            Button {
-                id: aiButton
+            Rectangle {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                height: 32
+                width: countRow.implicitWidth + 22
+                radius: 16
+                color: Theme.surface
+                border.width: 1
+                border.color: Theme.withAlpha(Theme.primary, 0.10)
 
-                implicitWidth: 200
-                implicitHeight: 40
-                text: page.aiBusy ? "AI 正在思考中..." : "✨ AI 生成测试名单"
-                enabled: !page.aiBusy && !backendBridge.rosterLoading
-                scale: aiButton.pressed ? 0.95 : 1.0
+                RowLayout {
+                    id: countRow
+                    anchors.centerIn: parent
+                    spacing: 7
 
-                Behavior on scale {
-                    NumberAnimation {
-                        duration: 120
-                        easing.type: Easing.OutCubic
+                    Rectangle {
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.preferredWidth: 7
+                        Layout.preferredHeight: 7
+                        radius: 3.5
+                        color: page.totalCount > 0 ? Theme.success : Theme.textTertiary
+                    }
+
+                    Text {
+                        Layout.alignment: Qt.AlignVCenter
+                        text: page.totalCount + " 人"
+                        color: Theme.textPrimary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontCaption
+                        font.weight: Font.DemiBold
                     }
                 }
-
-                onClicked: page.startAiRoster()
-
-                background: Rectangle {
-                    radius: 2
-                    color: aiButton.hovered && aiButton.enabled ? "#F3E9D2" : "transparent"
-                    border.width: 1
-                    border.color: aiButton.enabled ? "#D4AF37" : "#C9C2B2"
-                }
-
-                contentItem: Text {
-                    text: aiButton.text
-                    color: aiButton.enabled ? "#8C6B1F" : "#A4B0BE"
-                    font.pixelSize: 14
-                    font.letterSpacing: 1
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
-
-            Button {
-                id: importButton
-
-                implicitWidth: 150
-                implicitHeight: 40
-                text: backendBridge.rosterLoading ? "正在解析中..." : "导入 CSV 名单"
-                enabled: !backendBridge.rosterLoading
-                scale: importButton.pressed ? 0.95 : 1.0
-
-                Behavior on scale {
-                    NumberAnimation {
-                        duration: 120
-                        easing.type: Easing.OutCubic
-                    }
-                }
-
-                onClicked: backendBridge.openCsvFileDialog()
-
-                background: Rectangle {
-                    radius: 2
-                    color: importButton.enabled ? (importButton.hovered ? "#3A4E63" : "#2D3E50") : "#B9C2CB"
-                    border.width: 1
-                    border.color: importButton.enabled ? "#D4AF37" : "#B9C2CB"
-                }
-
-                contentItem: Text {
-                    text: importButton.text
-                    color: "#F8F6F0"
-                    font.pixelSize: 14
-                    font.letterSpacing: 2
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
             }
         }
 
-        Text {
-            Layout.fillWidth: true
-            visible: page.aiMessage.length > 0
-            text: page.aiMessage
-            color: "#B4543F"
-            font.pixelSize: 13
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 1
-            color: "#E4DFD3"
-        }
-
-        ListView {
-            id: list
-
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+        // ─────────────────────────────────────────────────────────
+        // 工具栏
+        // ─────────────────────────────────────────────────────────
+        Row {
+            id: toolbar
+            anchors.top: header.bottom
+            anchors.topMargin: 14
+            anchors.right: parent.right
             spacing: 10
+
+            RosterButton {
+                width: 124
+                height: 40
+                text: "重置抽取状态"
+                soft: false
+                enabled: page.totalCount > 0 && !page.loading
+                onClicked: backendBridge.resetDrawnHistory()
+            }
+
+            RosterButton {
+                width: 160
+                height: 40
+                text: page.aiBusy ? "AI 生成中…" : "✨ AI 生成名单"
+                soft: true
+                enabled: !page.aiBusy && !page.loading
+                onClicked: page.startAiRoster()
+            }
+
+            RosterButton {
+                width: 142
+                height: 40
+                text: page.loading ? "正在解析…" : "导入 CSV"
+                primary: true
+                enabled: !page.loading
+                onClicked: backendBridge.openCsvFileDialog()
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // AI 提示
+        // ─────────────────────────────────────────────────────────
+        Rectangle {
+            id: aiBanner
+            anchors.top: toolbar.bottom
+            anchors.topMargin: 10
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: visible ? 38 : 0
+            radius: 10
+            color: Theme.dangerSoft
+            visible: page.aiMessage.length > 0
+
+            Text {
+                anchors.fill: parent
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
+                text: page.aiMessage
+                color: Theme.danger
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontCaption
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // 名单列表
+        // ─────────────────────────────────────────────────────────
+        ListView {
+            id: listView
+
+            anchors.top: page.aiMessage.length > 0 ? aiBanner.bottom : toolbar.bottom
+            anchors.topMargin: 16
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
             clip: true
+            spacing: 8
             cacheBuffer: 2000
+            boundsBehavior: Flickable.StopAtBounds
             model: page.participants
 
+            ScrollBar.vertical: ScrollBar {
+                policy: ScrollBar.AlwaysOff
+            }
+
             delegate: Rectangle {
-                width: list.width
-                height: 64
-                radius: 2
-                color: "#FBF9F4"
+                id: card
+
+                width: ListView.view ? ListView.view.width : 0
+                height: 72
+                radius: Theme.radiusListCard
+                color: Theme.surface
                 border.width: 1
-                border.color: modelData.enabled ? "#D8E0D6" : "#E4DFD3"
-                opacity: !modelData.enabled ? 0.55 : (modelData.isDrawn ? 0.72 : 1.0)
+                border.color: cardMouse.containsMouse
+                              ? Theme.withAlpha(Theme.primary, 0.22)
+                              : Theme.withAlpha(Theme.textPrimary, 0.045)
+                opacity: !modelData.enabled ? 0.55 : (modelData.isDrawn ? 0.78 : 1.0)
+                scale: cardMouse.pressed ? 0.995 : (cardMouse.containsMouse ? 1.002 : 1.0)
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: Theme.durationNormal
+                        easing.type: Easing.OutCubic
+                    }
+                }
+
+                Behavior on scale {
+                    NumberAnimation {
+                        duration: Theme.durationFast
+                        easing.type: Easing.OutCubic
+                    }
+                }
+
+                Behavior on border.color {
+                    ColorAnimation {
+                        duration: Theme.durationFast
+                        easing.type: Easing.OutCubic
+                    }
+                }
 
                 MouseArea {
+                    id: cardMouse
                     anchors.fill: parent
+                    hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: backendBridge.toggleParticipantStatus(modelData.index)
                 }
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 20
-                    anchors.rightMargin: 20
-                    spacing: 16
+                    anchors.leftMargin: 16
+                    anchors.rightMargin: 16
+                    spacing: 14
 
-                    RowLayout {
-                        Layout.preferredWidth: 230
-                        spacing: 8
+                    Rectangle {
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.preferredWidth: 42
+                        Layout.preferredHeight: 42
+                        radius: 21
+                        color: Theme.primarySoft
 
                         Text {
-                            Layout.preferredWidth: 140
+                            anchors.centerIn: parent
+                            text: page.initialOf(modelData.name)
+                            color: Theme.primary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 17
+                            font.weight: Font.Bold
+                        }
+                    }
+
+                    Column {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: 4
+
+                        Text {
+                            width: parent.width
                             text: modelData.name
-                            color: "#2D3E50"
-                            font.pixelSize: 18
+                            color: Theme.textPrimary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 15
+                            font.weight: Font.DemiBold
                             elide: Text.ElideRight
                         }
 
-                        Rectangle {
-                            visible: modelData.isDrawn
-                            width: 62
-                            height: 22
-                            radius: 2
-                            color: "transparent"
-                            border.width: 1
-                            border.color: "#3F5A4E"
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "已抽中"
-                                color: "#3F5A4E"
-                                font.pixelSize: 11
-                            }
+                        Text {
+                            width: parent.width
+                            text: modelData.studentId + (modelData.group.length > 0 ? " · " + modelData.group : "")
+                            color: Theme.textSecondary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
                         }
                     }
 
-                    Text {
-                        Layout.fillWidth: true
-                        text: modelData.group.length > 0 ? modelData.group : "未分组"
-                        color: "#3F5A4E"
-                        font.pixelSize: 14
-                    }
-
-                    Text {
-                        text: modelData.studentId
-                        color: "#8A97A5"
-                        font.pixelSize: 13
-                    }
-
                     Rectangle {
-                        width: 64
-                        height: 30
-                        radius: 15
-                        color: weightArea.containsMouse ? "#EFEAE0" : "transparent"
-                        border.width: 1
-                        border.color: "#D4AF37"
+                        id: weightPill
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.preferredWidth: 68
+                        Layout.preferredHeight: 28
+                        radius: 14
+                        color: weightMouse.containsMouse
+                               ? Theme.primarySoft
+                               : Theme.surfaceAlt
 
                         Behavior on color {
                             ColorAnimation {
-                                duration: 140
+                                duration: Theme.durationFast
+                                easing.type: Easing.OutCubic
                             }
                         }
 
                         Text {
                             anchors.centerIn: parent
                             text: page.weightLabel(modelData.weight)
-                            color: "#8C6B1F"
-                            font.pixelSize: 13
+                            color: Theme.primary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
                         }
 
                         MouseArea {
-                            id: weightArea
-
+                            id: weightMouse
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-
-                            onClicked: {
-                                weightDialog.targetId = modelData.id;
-                                weightDialog.targetName = modelData.name;
-                                weightField.text = modelData.weight.toString();
-                                weightDialog.open();
-                            }
+                            onClicked: page.openWeightDialog(modelData)
                         }
                     }
 
                     Rectangle {
-                        width: 10
-                        height: 10
-                        radius: width / 2
-                        color: modelData.enabled ? "#3F5A4E" : "transparent"
-                        border.width: 1
-                        border.color: modelData.enabled ? "#3F5A4E" : "#B9C2CB"
+                        id: statusPill
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.preferredWidth: statusLabel.implicitWidth + 20
+                        Layout.preferredHeight: 24
+                        radius: 12
+                        color: page.statusBackground(modelData)
+
+                        Text {
+                            id: statusLabel
+                            anchors.centerIn: parent
+                            text: page.statusText(modelData)
+                            color: page.statusColor(modelData)
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                        }
                     }
                 }
             }
 
-            Text {
+            // 空状态
+            Item {
                 anchors.centerIn: parent
-                visible: list.count === 0
-                text: "暂无名单，点击右上角导入"
-                color: "#8A97A5"
-                font.pixelSize: 16
+                width: Math.min(360, listView.width - 40)
+                height: 150
+                visible: listView.count === 0 && !page.loading
+
+                Column {
+                    width: parent.width
+                    anchors.centerIn: parent
+                    spacing: 12
+
+                    Item {
+                        width: parent.width
+                        height: 64
+
+                        Rectangle {
+                            width: 64
+                            height: 64
+                            radius: 32
+                            anchors.centerIn: parent
+                            color: Theme.primarySoft
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "名"
+                                color: Theme.primary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 24
+                                font.weight: Font.Bold
+                            }
+                        }
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: "名单还是空的"
+                        horizontalAlignment: Text.AlignHCenter
+                        color: Theme.textPrimary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 16
+                        font.weight: Font.DemiBold
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: "导入 CSV，或让 AI 生成一份示例名单"
+                        horizontalAlignment: Text.AlignHCenter
+                        color: Theme.textSecondary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontCaption
+                    }
+                }
             }
         }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // 权重编辑
+    // ─────────────────────────────────────────────────────────────
     Dialog {
         id: weightDialog
 
         property string targetId: ""
         property string targetName: ""
 
-        anchors.centerIn: parent
         parent: Overlay.overlay
+        anchors.centerIn: parent
         modal: true
-        width: 340
+        width: 380
         padding: 24
 
         background: Rectangle {
-            color: "#FBF9F4"
-            border.width: 1
-            border.color: "#D4AF37"
+            radius: Theme.radiusCard
+            color: Theme.surface
         }
 
-        contentItem: ColumnLayout {
+        contentItem: Column {
+            width: 380 - 48
             spacing: 14
 
             Text {
+                width: parent.width
                 text: weightDialog.targetName + " · 中签权重"
-                color: "#2D3E50"
-                font.pixelSize: 16
-                font.letterSpacing: 2
+                color: Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontH2
+                font.weight: Font.DemiBold
+                elide: Text.ElideRight
+            }
+
+            Text {
+                width: parent.width
+                text: "权重越高，被抽中的概率越大。"
+                color: Theme.textSecondary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontCaption
             }
 
             TextField {
                 id: weightField
-
-                Layout.fillWidth: true
+                width: parent.width
+                height: 44
                 placeholderText: "大于 0 的数字"
+                placeholderTextColor: Theme.textTertiary
                 selectByMouse: true
+                color: Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                leftPadding: 14
 
                 validator: DoubleValidator {
                     bottom: 0.1
@@ -367,66 +535,148 @@ Item {
                     decimals: 2
                 }
 
+                background: Rectangle {
+                    radius: Theme.radiusControl
+                    color: Theme.surfaceAlt
+                    border.width: 1
+                    border.color: weightField.activeFocus
+                                  ? Theme.primary
+                                  : Theme.withAlpha(Theme.textPrimary, 0.06)
+                }
+
                 onAccepted: weightDialog.accept()
             }
 
-            RowLayout {
-                Layout.alignment: Qt.AlignRight
-                spacing: 10
+            Item {
+                width: parent.width
+                height: 40
 
-                Button {
-                    id: weightCancelButton
+                Row {
+                    anchors.right: parent.right
+                    height: parent.height
+                    spacing: 10
 
-                    text: "取 消"
-                    implicitWidth: 90
-                    implicitHeight: 36
-
-                    onClicked: weightDialog.reject()
-
-                    background: Rectangle {
-                        radius: 2
-                        color: "transparent"
-                        border.width: 1
-                        border.color: "#C9C2B2"
+                    RosterButton {
+                        width: 92
+                        height: 40
+                        text: "取消"
+                        soft: false
+                        onClicked: weightDialog.reject()
                     }
 
-                    contentItem: Text {
-                        text: weightCancelButton.text
-                        color: "#6B7A88"
-                        font.pixelSize: 14
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                }
-
-                Button {
-                    id: weightApplyButton
-
-                    text: "确 定"
-                    implicitWidth: 90
-                    implicitHeight: 36
-                    enabled: weightField.acceptableInput && weightField.text.length > 0
-
-                    onClicked: weightDialog.accept()
-
-                    background: Rectangle {
-                        radius: 2
-                        color: weightApplyButton.enabled ? "#2D3E50" : "#B9C2CB"
-                        border.width: 1
-                        border.color: weightApplyButton.enabled ? "#D4AF37" : "#B9C2CB"
-                    }
-
-                    contentItem: Text {
-                        text: weightApplyButton.text
-                        color: "#F8F6F0"
-                        font.pixelSize: 14
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    RosterButton {
+                        width: 100
+                        height: 40
+                        text: "确认"
+                        primary: true
+                        enabled: weightField.acceptableInput
+                                 && weightField.text.length > 0
+                        onClicked: weightDialog.accept()
                     }
                 }
             }
         }
 
-        onAccepted: backendBridge.updateParticipantWeight(targetId, parseFloat(weightField.text))
+        onAccepted: {
+            backendBridge.updateParticipantWeight(weightDialog.targetId,
+                                                  parseFloat(weightField.text))
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 通用按钮
+    // ─────────────────────────────────────────────────────────────
+    component RosterButton: Item {
+        id: button
+
+        property string text: ""
+        property bool primary: false
+        property bool soft: false
+        signal clicked()
+
+        implicitWidth: 130
+        implicitHeight: 40
+        width: 130
+        height: 40
+        enabled: true
+        opacity: enabled ? 1.0 : 0.45
+        scale: mouse.pressed && enabled
+               ? 0.95
+               : (mouse.containsMouse && enabled ? 1.02 : 1.0)
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: Theme.transparent
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop {
+                    position: 0.0
+                    color: button.primary
+                           ? Theme.primary
+                           : (button.soft ? Theme.primarySoft : Theme.surface)
+                }
+                GradientStop {
+                    position: 1.0
+                    color: button.primary
+                           ? Theme.primaryEnd
+                           : (button.soft ? Theme.primarySoft : Theme.surface)
+                }
+            }
+            border.width: button.primary ? 0 : 1
+            border.color: button.soft
+                          ? Theme.withAlpha(Theme.primary, 0.10)
+                          : Theme.border
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: button.primary ? Theme.white : Theme.primarySoft
+            opacity: mouse.containsMouse && button.enabled
+                     ? (button.primary ? 0.10 : 0.55)
+                     : 0.0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        Text {
+            anchors.centerIn: parent
+            text: button.text
+            color: button.primary ? Theme.white : Theme.primary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontCaption
+            font.weight: Font.DemiBold
+        }
+
+        MouseArea {
+            id: mouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: button.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: {
+                if (button.enabled)
+                    button.clicked()
+            }
+        }
     }
 }

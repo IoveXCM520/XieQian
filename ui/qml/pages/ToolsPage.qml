@@ -1,230 +1,292 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Window
 
+import ".."
+
+/*!
+    教学工具页。
+    - 随机分组 / 随机排座位
+    - 分组结果 Flow 卡片流，座位结果 6 列网格
+    - 平滑入场动画
+*/
 Item {
     id: page
 
     readonly property bool reducedMotion: !backendBridge.motionEnabled
     readonly property int modeGroups: 0
     readonly property int modeSeats: 1
-
-    property int mode: modeGroups
-    property var groups: []
-    property var seats: []
     readonly property int seatColumns: 6
 
+    property int mode: modeGroups
+    property int groupCount: 4
+    property var groups: []
+    property var seats: []
+
+    readonly property int rosterCount: backendBridge.rosterCount
+    readonly property int groupedCount: {
+        var count = 0
+        for (var i = 0; i < groups.length; ++i)
+            count += groups[i].length
+        return count
+    }
+
     function startGrouping() {
-        if (backendBridge.rosterCount === 0)
-            return;
+        if (rosterCount === 0)
+            return
 
-        var count = parseInt(groupCountField.text);
-        if (isNaN(count) || count < 1)
-            return;
-
-        if (Window.window)
-            Window.window.playClick();
-
-        page.groups = backendBridge.generateGroups(count);
+        groups = backendBridge.generateGroups(groupCount)
     }
 
     function startSeating() {
-        if (backendBridge.rosterCount === 0)
-            return;
+        if (rosterCount === 0)
+            return
 
-        if (Window.window)
-            Window.window.playClick();
+        seats = backendBridge.generateSeats()
+    }
 
-        page.seats = backendBridge.generateSeats();
+    function generate() {
+        if (mode === modeGroups)
+            startGrouping()
+        else
+            startSeating()
     }
 
     Connections {
         target: backendBridge
 
         function onRosterUpdated() {
-            page.groups = [];
-            page.seats = [];
+            page.groups = []
+            page.seats = []
         }
     }
 
-    ColumnLayout {
+    Item {
+        id: pageContent
         anchors.fill: parent
-        anchors.margins: 40
-        spacing: 20
+        anchors.margins: Theme.pagePadding
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 16
+        // ─────────────────────────────────────────────────────────
+        // 标题
+        // ─────────────────────────────────────────────────────────
+        Item {
+            id: header
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 64
 
-            Text {
-                Layout.fillWidth: true
-                text: "教学工具"
-                color: "#2D3E50"
-                font.pixelSize: 28
-                font.letterSpacing: 4
-            }
-
-            Text {
-                text: backendBridge.rosterCount + " 人"
-                color: "#3F5A4E"
-                font.pixelSize: 14
-            }
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 1
-            color: "#E4DFD3"
-        }
-
-        Rectangle {
-            id: modeSwitcher
-
-            implicitWidth: modeRow.implicitWidth + 10
-            implicitHeight: 44
-            radius: height / 2
-            color: "#EFEAE0"
-            border.width: 1
-            border.color: "#E1D8C6"
-
-            Row {
-                id: modeRow
-
-                anchors.centerIn: parent
+            Column {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
                 spacing: 4
 
-                Repeater {
-                    model: ["随机分组", "随机排座位"]
+                Text {
+                    text: "教学工具"
+                    color: Theme.textPrimary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontH0
+                    font.weight: Font.Bold
+                }
 
-                    delegate: Rectangle {
-                        width: modeLabel.implicitWidth + 36
-                        height: 36
-                        radius: height / 2
-                        color: page.mode === index ? "#2D3E50" : "transparent"
+                Text {
+                    text: "随机分组、随机排座，让课堂互动更轻松"
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
+                }
+            }
 
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: 180
-                            }
-                        }
+            Rectangle {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                height: 32
+                width: toolCount.implicitWidth + 22
+                radius: 16
+                color: Theme.surface
+                border.width: 1
+                border.color: Theme.withAlpha(Theme.primary, 0.10)
+
+                Text {
+                    id: toolCount
+                    anchors.centerIn: parent
+                    text: page.rosterCount + " 人"
+                    color: Theme.textPrimary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
+                    font.weight: Font.DemiBold
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // 控制栏
+        // ─────────────────────────────────────────────────────────
+        RowLayout {
+            id: controls
+            anchors.top: header.bottom
+            anchors.topMargin: 14
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: 12
+
+            ToolSegment {
+                width: 288
+                height: 44
+                currentIndex: page.mode
+                onSelected: function(index) {
+                    page.mode = index
+                }
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+            }
+
+            Item {
+                visible: page.mode === page.modeGroups
+                Layout.preferredWidth: 132
+                Layout.preferredHeight: 40
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: height / 2
+                    color: Theme.surface
+                    border.width: 1
+                    border.color: Theme.border
+                }
+
+                Row {
+                    anchors.fill: parent
+                    spacing: 0
+
+                    Item {
+                        width: 38
+                        height: parent.height
 
                         Text {
-                            id: modeLabel
-
                             anchors.centerIn: parent
-                            text: modelData
-                            color: page.mode === index ? "#F8F6F0" : "#6B7A88"
-                            font.pixelSize: 14
-                            font.letterSpacing: 2
+                            text: "−"
+                            color: page.groupCount > 1 ? Theme.primary : Theme.textTertiary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 20
                         }
 
                         MouseArea {
                             anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: page.mode = index
+                            cursorShape: page.groupCount > 1
+                                         ? Qt.PointingHandCursor
+                                         : Qt.ArrowCursor
+                            onClicked: {
+                                if (page.groupCount > 1)
+                                    page.groupCount -= 1
+                            }
+                        }
+                    }
+
+                    Text {
+                        width: 56
+                        height: parent.height
+                        text: page.groupCount + " 组"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        color: Theme.textPrimary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontCaption
+                        font.weight: Font.DemiBold
+                    }
+
+                    Item {
+                        width: 38
+                        height: parent.height
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "+"
+                            color: page.groupCount < 20 ? Theme.primary : Theme.textTertiary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 18
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: page.groupCount < 20
+                                         ? Qt.PointingHandCursor
+                                         : Qt.ArrowCursor
+                            onClicked: {
+                                if (page.groupCount < 20)
+                                    page.groupCount += 1
+                            }
                         }
                     }
                 }
             }
+
+            ToolAction {
+                width: 154
+                height: 44
+                primary: true
+                text: page.mode === page.modeGroups ? "开始分组" : "生成座位表"
+                enabled: page.rosterCount > 0
+                onClicked: page.generate()
+            }
         }
 
+        Text {
+            id: statLabel
+            anchors.top: controls.bottom
+            anchors.topMargin: 10
+            anchors.left: parent.left
+            text: {
+                if (page.mode === page.modeGroups) {
+                    if (page.groups.length === 0)
+                        return ""
+                    return "共 " + page.groups.length + " 组 · " + page.groupedCount + " 人"
+                }
+                if (page.seats.length === 0)
+                    return ""
+                return page.seatColumns + " 列 × "
+                       + Math.ceil(page.seats.length / page.seatColumns) + " 行"
+            }
+            color: Theme.textSecondary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontCaption
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // 结果区
+        // ─────────────────────────────────────────────────────────
         StackLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            id: resultStack
+
+            anchors.top: statLabel.bottom
+            anchors.topMargin: 12
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
             currentIndex: page.mode
 
             // 随机分组
-            ColumnLayout {
-                spacing: 18
+            Item {
+                Flickable {
+                    id: groupFlick
 
-                RowLayout {
-                    spacing: 12
-
-                    Text {
-                        text: "组数"
-                        color: "#3F5A4E"
-                        font.pixelSize: 14
-                        font.letterSpacing: 2
-                    }
-
-                    TextField {
-                        id: groupCountField
-
-                        implicitWidth: 90
-                        implicitHeight: 40
-                        text: "4"
-                        selectByMouse: true
-                        horizontalAlignment: TextInput.AlignHCenter
-
-                        validator: IntValidator {
-                            bottom: 1
-                            top: 50
-                        }
-
-                        onAccepted: page.startGrouping()
-                    }
-
-                    Button {
-                        id: groupButton
-
-                        implicitWidth: 150
-                        implicitHeight: 40
-                        text: "开始分组"
-                        enabled: backendBridge.rosterCount > 0 && groupCountField.acceptableInput
-                        scale: groupButton.pressed ? 0.95 : 1.0
-
-                        Behavior on scale {
-                            NumberAnimation {
-                                duration: 120
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-
-                        onClicked: page.startGrouping()
-
-                        background: Rectangle {
-                            radius: 2
-                            color: groupButton.enabled ? (groupButton.hovered ? "#3A4E63" : "#2D3E50") : "#B9C2CB"
-                            border.width: 1
-                            border.color: groupButton.enabled ? "#D4AF37" : "#B9C2CB"
-                        }
-
-                        contentItem: Text {
-                            text: groupButton.text
-                            color: "#F8F6F0"
-                            font.pixelSize: 14
-                            font.letterSpacing: 2
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: page.groups.length > 0 ? "共 " + page.groups.length + " 组" : ""
-                        color: "#8A97A5"
-                        font.pixelSize: 13
-                    }
-                }
-
-                ScrollView {
-                    id: groupScroll
-
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    anchors.fill: parent
                     clip: true
-                    contentWidth: availableWidth
+                    contentWidth: width
                     contentHeight: groupFlow.height + 8
+                    boundsBehavior: Flickable.StopAtBounds
 
-                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                    ScrollBar.vertical: ScrollBar {
+                        policy: ScrollBar.AlwaysOff
+                    }
 
                     Flow {
                         id: groupFlow
 
-                        width: groupScroll.availableWidth
-                        height: childrenRect.height
-                        spacing: 16
+                        width: groupFlick.width
+                        spacing: 14
 
                         Repeater {
                             model: page.groups
@@ -234,22 +296,24 @@ Item {
 
                                 property bool shown: false
 
-                                width: 220
-                                height: cardColumn.childrenRect.height + 32
-                                radius: 2
-                                color: "#FBF9F4"
+                                width: Math.max(220, Math.min(300,
+                                                             (groupFlow.width - 14) / 2))
+                                height: groupColumn.childrenRect.height + 30
+                                radius: Theme.radiusListCard
+                                color: Theme.surface
                                 border.width: 1
-                                border.color: "#DCD3C0"
+                                border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
                                 opacity: shown ? 1 : 0
 
                                 Behavior on opacity {
                                     NumberAnimation {
-                                        duration: page.reducedMotion ? 0 : 260
+                                        duration: page.reducedMotion ? 0 : 240
+                                        easing.type: Easing.OutCubic
                                     }
                                 }
 
                                 transform: Translate {
-                                    y: groupCard.shown ? 0 : 16
+                                    y: groupCard.shown ? 0 : 14
 
                                     Behavior on y {
                                         NumberAnimation {
@@ -260,222 +324,356 @@ Item {
                                 }
 
                                 Timer {
-                                    interval: page.reducedMotion ? 0 : index * 70
+                                    interval: page.reducedMotion ? 0 : index * 60
                                     running: true
                                     onTriggered: groupCard.shown = true
                                 }
 
                                 Column {
-                                    id: cardColumn
+                                    id: groupColumn
 
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.top: parent.top
-                                    anchors.margins: 16
-                                    spacing: 10
+                                    x: 16
+                                    y: 15
+                                    width: parent.width - 32
+                                    spacing: 8
 
                                     Item {
-                                        width: cardColumn.width
+                                        width: parent.width
                                         height: 22
 
                                         Text {
                                             anchors.left: parent.left
                                             anchors.verticalCenter: parent.verticalCenter
                                             text: "第 " + (index + 1) + " 组"
-                                            color: "#8C6B1F"
-                                            font.pixelSize: 15
-                                            font.letterSpacing: 2
+                                            color: Theme.primary
+                                            font.family: Theme.fontFamily
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
                                         }
 
                                         Text {
                                             anchors.right: parent.right
                                             anchors.verticalCenter: parent.verticalCenter
                                             text: modelData.length + " 人"
-                                            color: "#8A97A5"
-                                            font.pixelSize: 12
+                                            color: Theme.textSecondary
+                                            font.family: Theme.fontFamily
+                                            font.pixelSize: 11
                                         }
                                     }
 
                                     Rectangle {
-                                        width: cardColumn.width
+                                        width: parent.width
                                         height: 1
-                                        color: "#E7DFCF"
+                                        color: Theme.withAlpha(Theme.textPrimary, 0.045)
                                     }
 
                                     Repeater {
                                         model: modelData
 
                                         delegate: Text {
-                                            width: cardColumn.width
+                                            width: groupColumn.width
+                                            height: 22
                                             text: modelData
-                                            color: "#2D3E50"
-                                            font.pixelSize: 16
+                                            color: Theme.textPrimary
+                                            font.family: Theme.fontFamily
+                                            font.pixelSize: 13
                                             elide: Text.ElideRight
+                                            verticalAlignment: Text.AlignVCenter
                                         }
                                     }
                                 }
                             }
                         }
-
-                        Text {
-                            width: groupScroll.availableWidth
-                            topPadding: 70
-                            visible: page.groups.length === 0
-                            text: backendBridge.rosterCount > 0 ? "设定组数后点击“开始分组”" : "暂无名单，请先在名单页导入"
-                            color: "#8A97A5"
-                            font.pixelSize: 16
-                            horizontalAlignment: Text.AlignHCenter
-                        }
                     }
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    width: Math.min(420, parent.width - 40)
+                    text: page.rosterCount > 0
+                          ? "设置组数后，点击“开始分组”"
+                          : "暂无名单，请先在名单页导入"
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontBody
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.groups.length === 0
                 }
             }
 
             // 随机排座位
-            ColumnLayout {
-                spacing: 18
+            Item {
+                Flickable {
+                    id: seatFlick
 
-                RowLayout {
-                    spacing: 12
-
-                    Button {
-                        id: seatButton
-
-                        implicitWidth: 170
-                        implicitHeight: 40
-                        text: "生成座位表"
-                        enabled: backendBridge.rosterCount > 0
-                        scale: seatButton.pressed ? 0.95 : 1.0
-
-                        Behavior on scale {
-                            NumberAnimation {
-                                duration: 120
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-
-                        onClicked: page.startSeating()
-
-                        background: Rectangle {
-                            radius: 2
-                            color: seatButton.enabled ? (seatButton.hovered ? "#3A4E63" : "#2D3E50") : "#B9C2CB"
-                            border.width: 1
-                            border.color: seatButton.enabled ? "#D4AF37" : "#B9C2CB"
-                        }
-
-                        contentItem: Text {
-                            text: seatButton.text
-                            color: "#F8F6F0"
-                            font.pixelSize: 14
-                            font.letterSpacing: 2
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: page.seats.length > 0
-                              ? page.seatColumns + " 列 × " + Math.ceil(page.seats.length / page.seatColumns) + " 行"
-                              : ""
-                        color: "#8A97A5"
-                        font.pixelSize: 13
-                    }
-                }
-
-                ScrollView {
-                    id: seatScroll
-
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    anchors.fill: parent
                     clip: true
-                    contentWidth: availableWidth
-                    contentHeight: seatContent.height
+                    contentWidth: width
+                    contentHeight: seatGrid.height + 8
+                    boundsBehavior: Flickable.StopAtBounds
 
-                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                    ScrollBar.vertical: ScrollBar {
+                        policy: ScrollBar.AlwaysOff
+                    }
 
-                    Item {
-                        id: seatContent
+                    Grid {
+                        id: seatGrid
 
-                        width: seatScroll.availableWidth
-                        height: seatGrid.height + 4
+                        readonly property real cellWidth: Math.max(1,
+                            (seatFlick.width - columnSpacing * (page.seatColumns - 1))
+                            / page.seatColumns)
+                        readonly property real cellHeight: 52
+                        readonly property int rowCount: page.seatColumns > 0
+                                                         ? Math.ceil(page.seats.length / page.seatColumns)
+                                                         : 0
 
-                        Grid {
-                            id: seatGrid
+                        width: seatFlick.width
+                        height: rowCount > 0
+                                ? rowCount * cellHeight + (rowCount - 1) * rowSpacing
+                                : 0
+                        columns: page.seatColumns
+                        rowSpacing: 12
+                        columnSpacing: 12
 
-                            readonly property real cellWidth: Math.max(1, Math.floor((width - columnSpacing * (page.seatColumns - 1)) / page.seatColumns))
-                            readonly property real cellHeight: Math.max(56, Math.round(cellWidth * 0.55))
-                            readonly property int rowCount: page.seatColumns > 0
-                                                             ? Math.ceil(page.seats.length / page.seatColumns)
-                                                             : 0
+                        Repeater {
+                            model: page.seats
 
-                            width: parent.width
-                            height: rowCount > 0 ? rowCount * cellHeight + (rowCount - 1) * rowSpacing : 0
-                            columns: page.seatColumns
-                            rowSpacing: 14
-                            columnSpacing: 14
+                            delegate: Rectangle {
+                                id: seatCell
 
-                            Repeater {
-                                model: page.seats
+                                property bool shown: false
 
-                                delegate: Rectangle {
-                                    id: seatCell
+                                width: seatGrid.cellWidth
+                                height: seatGrid.cellHeight
+                                radius: Theme.radiusListCard
+                                color: Theme.surface
+                                border.width: 1
+                                border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
+                                opacity: shown ? 1 : 0
 
-                                    property bool shown: false
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: page.reducedMotion ? 0 : 220
+                                        easing.type: Easing.OutCubic
+                                    }
+                                }
 
-                                    width: seatGrid.cellWidth
-                                    height: seatGrid.cellHeight
-                                    radius: 2
-                                    color: "#FBF9F4"
-                                    border.width: 1
-                                    border.color: "#DCD3C0"
-                                    opacity: shown ? 1 : 0
+                                transform: Translate {
+                                    y: seatCell.shown ? 0 : 14
 
-                                    Behavior on opacity {
+                                    Behavior on y {
                                         NumberAnimation {
                                             duration: page.reducedMotion ? 0 : 240
+                                            easing.type: Easing.OutCubic
                                         }
                                     }
+                                }
 
-                                    transform: Translate {
-                                        y: seatCell.shown ? 0 : 18
+                                Timer {
+                                    interval: page.reducedMotion ? 0 : index * 35
+                                    running: true
+                                    onTriggered: seatCell.shown = true
+                                }
 
-                                        Behavior on y {
-                                            NumberAnimation {
-                                                duration: page.reducedMotion ? 0 : 240
-                                                easing.type: Easing.OutCubic
-                                            }
-                                        }
-                                    }
-
-                                    Timer {
-                                        interval: page.reducedMotion ? 0 : index * 45
-                                        running: true
-                                        onTriggered: seatCell.shown = true
-                                    }
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        width: parent.width - 16
-                                        text: modelData
-                                        color: "#2D3E50"
-                                        font.pixelSize: 17
-                                        horizontalAlignment: Text.AlignHCenter
-                                        elide: Text.ElideRight
-                                    }
+                                Text {
+                                    anchors.centerIn: parent
+                                    width: parent.width - 12
+                                    text: modelData
+                                    color: Theme.textPrimary
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
                                 }
                             }
                         }
+                    }
+                }
 
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            y: 70
-                            visible: page.seats.length === 0
-                            text: backendBridge.rosterCount > 0 ? "点击“生成座位表”随机安排座位" : "暂无名单，请先在名单页导入"
-                            color: "#8A97A5"
-                            font.pixelSize: 16
+                Text {
+                    anchors.centerIn: parent
+                    width: Math.min(420, parent.width - 40)
+                    text: page.rosterCount > 0
+                          ? "点击“生成座位表”，随机安排课堂座位"
+                          : "暂无名单，请先在名单页导入"
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontBody
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: page.seats.length === 0
+                }
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 顶部模式切换
+    // ─────────────────────────────────────────────────────────────
+    component ToolSegment: Item {
+        id: control
+
+        property int currentIndex: 0
+        readonly property real segmentWidth: Math.max(0, (width - 8) / 2)
+        readonly property var labels: ["随机分组", "随机排座位"]
+        signal selected(int index)
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: Theme.surfaceAlt
+            border.width: 1
+            border.color: Theme.withAlpha(Theme.textPrimary, 0.035)
+        }
+
+        Rectangle {
+            x: 4 + control.currentIndex * control.segmentWidth
+            y: 4
+            width: control.segmentWidth
+            height: control.height - 8
+            radius: height / 2
+            color: Theme.surface
+
+            Behavior on x {
+                NumberAnimation {
+                    duration: 220
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        Row {
+            x: 4
+            width: Math.max(0, control.width - 8)
+            height: control.height
+
+            Repeater {
+                model: control.labels
+
+                delegate: Item {
+                    width: control.segmentWidth
+                    height: control.height
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: modelData
+                        color: control.currentIndex === index
+                               ? Theme.primary
+                               : Theme.textSecondary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontBody
+                        font.weight: control.currentIndex === index
+                                     ? Font.DemiBold
+                                     : Font.Normal
+
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: Theme.durationFast
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (control.currentIndex !== index)
+                                control.selected(index)
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 主操作按钮
+    // ─────────────────────────────────────────────────────────────
+    component ToolAction: Item {
+        id: button
+
+        property string text: ""
+        property bool primary: false
+        signal clicked()
+
+        implicitWidth: 150
+        implicitHeight: 44
+        width: 150
+        height: 44
+        enabled: true
+        opacity: enabled ? 1.0 : 0.45
+        scale: mouse.pressed && enabled
+               ? 0.95
+               : (mouse.containsMouse && enabled ? 1.02 : 1.0)
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: Theme.transparent
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop {
+                    position: 0.0
+                    color: button.primary ? Theme.primary : Theme.surface
+                }
+                GradientStop {
+                    position: 1.0
+                    color: button.primary ? Theme.primaryEnd : Theme.surface
+                }
+            }
+            border.width: button.primary ? 0 : 1
+            border.color: Theme.border
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: button.primary ? Theme.white : Theme.primarySoft
+            opacity: mouse.containsMouse && button.enabled
+                     ? (button.primary ? 0.10 : 0.55)
+                     : 0.0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        Text {
+            anchors.centerIn: parent
+            text: button.text
+            color: button.primary ? Theme.white : Theme.primary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontBody
+            font.weight: Font.DemiBold
+        }
+
+        MouseArea {
+            id: mouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: button.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: {
+                if (button.enabled)
+                    button.clicked()
             }
         }
     }

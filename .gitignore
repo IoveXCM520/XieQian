@@ -5,6 +5,7 @@ installer-output/
 .cache/
 .vscode/
 .idea/
+.aicode/
 *.o
 *.obj
 *.exe

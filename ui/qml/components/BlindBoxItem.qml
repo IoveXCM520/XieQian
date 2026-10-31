@@ -1,359 +1,664 @@
 import QtQuick
 
+import ".."
+
+/*!
+    现代盲盒抽签组件。
+    - 3 个盲盒，蓝/薄荷绿低饱和渐变，全部使用 Rectangle + Gradient
+    - 顶部独立盖子，可向上弹飞并旋转
+    - 不使用红色，也没有传统印花
+    - startOpen()：三个盒子轻微跳动 → 随机选中一个 → 盖子弹飞 → 内部强光 → 卷轴升起
+    - 选中时发出 boxSelected()，可在此时写入 winnerName
+    - 全部结束发出 finished()
+*/
 Item {
-    id: boxRoot
+    id: blindRoot
 
-    property color paperColor: "#F8F6F0"
-    property color daiColor: "#2D3E50"
-    property color goldColor: "#D4AF37"
+    implicitWidth: 680
+    implicitHeight: 380
 
-    property int boxCount: 3
+    readonly property int boxCount: 3
+    readonly property real boxWidth: Math.max(0, Math.min(width * 0.24, height * 0.40))
+    readonly property real lidHeight: Math.max(0, boxWidth * 0.17)
+    readonly property real bodyHeight: Math.max(0, boxWidth * 0.92)
+    readonly property real bodyY: Math.max(0, lidHeight - 3)
+    readonly property real boxHeight: bodyY + bodyHeight
+    readonly property real boxSpacing: Math.max(0, boxWidth * 0.38)
+    readonly property real totalWidth: boxCount * boxWidth + (boxCount - 1) * boxSpacing
+    readonly property real startX: (width - totalWidth) / 2
+    readonly property real baseY: (height - boxHeight) / 2
 
-    readonly property bool reducedMotion: !backendBridge.motionEnabled
+    readonly property bool running: (!!masterAnimation && masterAnimation.running) || openActive
 
-    readonly property real availableWidth: 680
-    readonly property real boxSpacing: boxCount <= 3 ? 56 : (boxCount <= 5 ? 30 : 14)
-    readonly property real boxWidth: Math.min(150, Math.floor((availableWidth - boxSpacing * (boxCount - 1)) / boxCount))
-    readonly property real boxHeight: Math.round(boxWidth * 1.13)
-    readonly property real boxScale: boxWidth / 150
+    property string winnerName: ""
+    property int selectedIndex: -1
+    property bool openActive: false
 
-    property var winnerNames: []
-    property var openedIndices: []
-    readonly property bool opened: openedIndices.length > 0
+    signal boxSelected()
+    signal finished()
 
-    property real highlightStep: -1
-    readonly property int highlightIndex: highlightStep >= 0 ? Math.floor(highlightStep) % boxCount : -1
+    function startOpen() {
+        if (running)
+            return
 
-    signal selectRequested()
-    signal revealFinished()
+        reset()
+        openActive = true
 
-    implicitWidth: boxCount * boxWidth + (boxCount - 1) * boxSpacing
-    implicitHeight: boxHeight + Math.round(boxHeight * 0.88)
-
-    function startAnimation() {
-        reset();
-        highlightAnimation.start();
-    }
-
-    function reveal(names) {
-        winnerNames = names;
-
-        var pool = [];
-        for (var i = 0; i < boxCount; ++i)
-            pool.push(i);
-        for (var k = pool.length - 1; k > 0; --k) {
-            var j = Math.floor(Math.random() * (k + 1));
-            var swap = pool[k];
-            pool[k] = pool[j];
-            pool[j] = swap;
+        for (var i = 0; i < boxRepeater.count; ++i) {
+            var box = boxRepeater.itemAt(i)
+            if (box)
+                box.jump(i * 45)
         }
-        openedIndices = pool.slice(0, Math.min(names.length, boxCount));
-        revealTimer.start();
+
+        masterAnimation.start()
     }
 
     function reset() {
-        winnerNames = [];
-        openedIndices = [];
-        highlightStep = -1;
-        revealTimer.stop();
-        highlightAnimation.stop();
+        openActive = false
+        selectedIndex = -1
+        masterAnimation.stop()
+        openConnections.target = null
+
+        for (var i = 0; i < boxRepeater.count; ++i) {
+            var box = boxRepeater.itemAt(i)
+            if (box)
+                box.resetBox()
+        }
     }
 
-    Timer {
-        id: revealTimer
-
-        interval: reducedMotion ? 300 : 1100
-        repeat: false
-
-        onTriggered: boxRoot.revealFinished()
+    function selectRandomBox() {
+        selectedIndex = Math.floor(Math.random() * boxCount)
     }
 
-    NumberAnimation {
-        id: highlightAnimation
+    function beginOpen() {
+        var box = boxRepeater.itemAt(selectedIndex)
+        if (!box) {
+            openActive = false
+            finished()
+            return
+        }
 
-        target: boxRoot
-        property: "highlightStep"
-        from: 0
-        to: boxRoot.boxCount * 4
-        duration: boxRoot.reducedMotion ? 300 : boxRoot.boxCount * 390
-        easing.type: Easing.Linear
+        openConnections.target = box
+        box.openBox()
+    }
 
-        onStopped: {
-            // 被 reset() 中断时 highlightStep 已置为 -1，不应再触发抽取
-            if (boxRoot.highlightStep >= 0) {
-                boxRoot.highlightStep = -1;
-                boxRoot.selectRequested();
+    SequentialAnimation {
+        id: masterAnimation
+
+        PauseAnimation {
+            duration: 720
+        }
+
+        ScriptAction {
+            script: {
+                blindRoot.selectRandomBox()
+                blindRoot.boxSelected()
+            }
+        }
+
+        PauseAnimation {
+            duration: 260
+        }
+
+        ScriptAction {
+            script: blindRoot.beginOpen()
+        }
+    }
+
+    Connections {
+        id: openConnections
+        target: null
+        ignoreUnknownSignals: true
+
+        function onOpenFinished() {
+            if (blindRoot.openActive) {
+                blindRoot.openActive = false
+                blindRoot.finished()
             }
         }
     }
 
     Repeater {
         id: boxRepeater
-
-        model: boxRoot.boxCount
+        model: blindRoot.boxCount
 
         delegate: Item {
             id: box
 
-            readonly property int winnerIndex: boxRoot.openedIndices.indexOf(index)
-            readonly property string userName: winnerIndex >= 0 ? boxRoot.winnerNames[winnerIndex] : ""
-            readonly property bool open: winnerIndex >= 0
-            readonly property bool dimmed: boxRoot.openedIndices.length > 0 && winnerIndex < 0
-            readonly property bool highlighted: boxRoot.highlightIndex === index
-            readonly property real lidHeight: Math.max(16, Math.round(30 * boxRoot.boxScale))
+            readonly property bool selected: blindRoot.selectedIndex === index
+            readonly property bool mint: index % 2 === 1
 
-            width: boxRoot.boxWidth
-            height: boxRoot.boxHeight
-            x: index * (boxRoot.boxWidth + boxRoot.boxSpacing)
-            y: (boxRoot.height - height) / 2 - (open ? Math.round(26 * boxRoot.boxScale) : 0)
-            opacity: dimmed ? 0.32 : 1
+            property real bounce: 0
+            property real lidOffset: 0
+            property real lidRotation: 0
+            property real lidOpacity: 1
+            property real glowOpacity: 0
+            property real scrollProgress: 0
+            property real scrollOpacity: 0
+            property bool opening: false
+
+            signal openFinished()
+
+            width: blindRoot.boxWidth
+            height: blindRoot.boxHeight
+            x: blindRoot.startX + index * (blindRoot.boxWidth + blindRoot.boxSpacing)
+            y: blindRoot.baseY + (selected ? -10 : 0)
+            z: selected ? 20 : 10 - Math.abs(index - 1)
+            opacity: blindRoot.selectedIndex >= 0 && !selected ? 0.58 : 1.0
+            scale: selected ? 1.04 : (blindRoot.selectedIndex >= 0 && !selected ? 0.97 : 1.0)
+
+            transform: Translate {
+                y: -box.bounce
+            }
 
             Behavior on y {
                 NumberAnimation {
-                    duration: reducedMotion ? 150 : 520
-                    easing.type: Easing.OutBack
+                    duration: 240
+                    easing.type: Easing.OutCubic
                 }
             }
+
             Behavior on opacity {
                 NumberAnimation {
-                    duration: reducedMotion ? 120 : 420
+                    duration: 220
+                    easing.type: Easing.OutCubic
                 }
             }
 
-            // 盒身
+            Behavior on scale {
+                NumberAnimation {
+                    duration: 240
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            function jump(delay) {
+                bounceSequence.stop()
+                bouncePause.duration = delay
+                bounceSequence.start()
+            }
+
+            function openBox() {
+                if (opening)
+                    return
+
+                bounceSequence.stop()
+                bounce = 0
+                opening = true
+                openSequence.start()
+            }
+
+            function resetBox() {
+                opening = false
+                bounceSequence.stop()
+                openSequence.stop()
+
+                bounce = 0
+                lidOffset = 0
+                lidRotation = 0
+                lidOpacity = 1
+                glowOpacity = 0
+                scrollProgress = 0
+                scrollOpacity = 0
+            }
+
+            // ─────────────────────────────────────────────────────
+            // 地面投影
+            // ─────────────────────────────────────────────────────
             Rectangle {
-                id: body
-
-                anchors.bottom: parent.bottom
-                width: parent.width
-                height: parent.height - box.lidHeight
-                radius: 4
-                border.width: 1
-                border.color: boxRoot.goldColor
-
-                gradient: Gradient {
-                    GradientStop {
-                        position: 0.0
-                        color: "#B93B2E"
-                    }
-                    GradientStop {
-                        position: 0.55
-                        color: "#9C2B21"
-                    }
-                    GradientStop {
-                        position: 1.0
-                        color: "#6E1A13"
-                    }
-                }
-
-                Rectangle {
-                    anchors.top: parent.top
-                    width: parent.width
-                    height: Math.max(3, Math.round(8 * boxRoot.boxScale))
-                    color: boxRoot.goldColor
-                    opacity: 0.75
-                }
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: Math.max(18, Math.round(56 * boxRoot.boxScale))
-                    height: width
-                    radius: 2
-                    color: "transparent"
-                    border.width: 1
-                    border.color: boxRoot.goldColor
-                    opacity: 0.7
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "福"
-                        color: boxRoot.goldColor
-                        font.pixelSize: Math.max(11, Math.round(26 * boxRoot.boxScale))
-                    }
-                }
-
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    anchors.left: parent.left
-                    anchors.leftMargin: Math.max(4, Math.round(10 * boxRoot.boxScale))
-                    width: Math.max(1, Math.round(2 * boxRoot.boxScale))
-                    color: boxRoot.goldColor
-                    opacity: 0.35
-                }
-
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    anchors.right: parent.right
-                    anchors.rightMargin: Math.max(4, Math.round(10 * boxRoot.boxScale))
-                    width: Math.max(1, Math.round(2 * boxRoot.boxScale))
-                    color: boxRoot.goldColor
-                    opacity: 0.35
-                }
+                x: (box.width - width) / 2
+                y: blindRoot.bodyY + blindRoot.bodyHeight - 6
+                width: box.width * 0.82
+                height: 14
+                radius: 7
+                color: "#0A000000"
+                z: 0
             }
 
-            // 盖子：开启时飞出
+            // ─────────────────────────────────────────────────────
+            // 卷轴：位于盒身之后，升起时从盒口露出
+            // ─────────────────────────────────────────────────────
             Rectangle {
-                id: lid
-
-                width: parent.width + Math.max(2, Math.round(8 * boxRoot.boxScale))
-                height: box.lidHeight
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: open ? -Math.round(150 * boxRoot.boxScale) : -Math.round(6 * boxRoot.boxScale)
-                rotation: open ? -20 : 0
-                opacity: open ? 0 : 1
-                radius: 4
-                clip: true
-                border.width: 1
-                border.color: "#F0DCA0"
-
-                gradient: Gradient {
-                    GradientStop {
-                        position: 0.0
-                        color: "#D4AF37"
-                    }
-                    GradientStop {
-                        position: 0.5
-                        color: "#B8912C"
-                    }
-                    GradientStop {
-                        position: 1.0
-                        color: "#8C6B1F"
-                    }
-                }
-
-                Behavior on y {
-                    NumberAnimation {
-                        duration: reducedMotion ? 150 : 620
-                        easing.type: Easing.OutCubic
-                    }
-                }
-                Behavior on rotation {
-                    NumberAnimation {
-                        duration: reducedMotion ? 150 : 620
-                        easing.type: Easing.OutCubic
-                    }
-                }
-                Behavior on opacity {
-                    NumberAnimation {
-                        duration: reducedMotion ? 120 : 520
-                        easing.type: Easing.InQuad
-                    }
-                }
-
-                // 金色流光
-                Rectangle {
-                    id: shimmer
-
-                    width: Math.max(12, Math.round(34 * boxRoot.boxScale))
-                    height: parent.height
-                    opacity: open ? 0 : 0.85
-
-                    gradient: Gradient {
-                        GradientStop {
-                            position: 0.0
-                            color: "transparent"
-                        }
-                        GradientStop {
-                            position: 0.5
-                            color: "#FFF3C9"
-                        }
-                        GradientStop {
-                            position: 1.0
-                            color: "transparent"
-                        }
-                    }
-
-                    NumberAnimation on x {
-                        running: !box.open
-                        loops: Animation.Infinite
-                        from: -shimmer.width
-                        to: lid.width
-                        duration: 1600 + index * 260
-                    }
-                }
-            }
-
-            // 卷轴：开启后从盒中弹出
-            Item {
                 id: scroll
 
-                width: Math.max(40, Math.round(96 * boxRoot.boxScale))
-                height: Math.max(36, Math.round(74 * boxRoot.boxScale))
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: open ? -(height + Math.round(8 * boxRoot.boxScale)) : Math.round(20 * boxRoot.boxScale)
-                scale: open ? 1 : 0.25
-                opacity: open ? 1 : 0
-                visible: opacity > 0.01
-                z: 5
+                width: box.width * 0.60
+                height: blindRoot.boxWidth * 0.78
+                x: (box.width - width) / 2
+                y: blindRoot.bodyY + blindRoot.bodyHeight - height - box.scrollProgress * (blindRoot.bodyHeight * 0.95)
+                z: 0.5
+                opacity: box.scrollOpacity
+                radius: 10
+                border.width: 1
+                border.color: Theme.withAlpha(Theme.textPrimary, 0.08)
 
-                Behavior on y {
-                    NumberAnimation {
-                        duration: reducedMotion ? 150 : 520
-                        easing.type: Easing.OutCubic
-                    }
-                }
-                Behavior on scale {
-                    NumberAnimation {
-                        duration: reducedMotion ? 150 : 520
-                        easing.type: Easing.OutBack
-                    }
-                }
-                Behavior on opacity {
-                    NumberAnimation {
-                        duration: reducedMotion ? 120 : 360
-                    }
+                gradient: Gradient {
+                    orientation: Gradient.Vertical
+                    GradientStop { position: 0.0; color: "#FFFEFA" }
+                    GradientStop { position: 0.62; color: "#FFFFFF" }
+                    GradientStop { position: 1.0; color: "#F2F9FF" }
                 }
 
+                // 卷轴上下卷边
                 Rectangle {
-                    anchors.fill: parent
-                    anchors.topMargin: Math.max(3, Math.round(8 * boxRoot.boxScale))
-                    anchors.bottomMargin: anchors.topMargin
-                    color: "#FBF3DE"
+                    x: -4
+                    y: -5
+                    width: parent.width + 8
+                    height: 10
+                    radius: 5
                     border.width: 1
-                    border.color: "#DCC48A"
+                    border.color: Theme.withAlpha(Theme.textPrimary, 0.07)
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "#E6F0FB" }
+                        GradientStop { position: 0.5; color: "#FFFFFF" }
+                        GradientStop { position: 1.0; color: "#DDEEE7" }
+                    }
                 }
 
                 Rectangle {
-                    anchors.top: parent.top
-                    width: parent.width
-                    height: Math.max(3, Math.round(8 * boxRoot.boxScale))
+                    x: -4
+                    y: parent.height - 8
+                    width: parent.width + 8
+                    height: 8
                     radius: 4
-                    color: "#8C6B1F"
-                }
-
-                Rectangle {
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: Math.max(3, Math.round(8 * boxRoot.boxScale))
-                    radius: 4
-                    color: "#8C6B1F"
+                    border.width: 1
+                    border.color: Theme.withAlpha(Theme.textPrimary, 0.07)
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "#E6F0FB" }
+                        GradientStop { position: 0.5; color: "#FFFFFF" }
+                        GradientStop { position: 1.0; color: "#DDEEE7" }
+                    }
                 }
 
                 Text {
-                    anchors.centerIn: parent
-                    width: parent.width - 12
-                    text: box.userName
-                    color: "#7B2018"
-                    font.pixelSize: Math.max(11, Math.round((box.userName.length > 2 ? 20 : 26) * boxRoot.boxScale))
-                    font.letterSpacing: 1
+                    width: Math.max(0, parent.width - 12)
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 18
+                    text: "幸运签"
                     horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.Wrap
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 8
+                    font.letterSpacing: 2
+                }
+
+                Text {
+                    width: Math.max(0, parent.width - 10)
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 32
+                    text: blindRoot.winnerName.length > 0
+                          ? blindRoot.winnerName
+                          : "幸运签"
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Theme.primary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 14
+                    font.weight: Font.Bold
+                    elide: Text.ElideRight
+                }
+
+                Rectangle {
+                    width: 22
+                    height: 2
+                    radius: 1
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 54
+                    gradient: Theme.primaryGradient
+                    opacity: 0.8
                 }
             }
 
-            // 闪烁高亮
-            Rectangle {
-                anchors.fill: parent
-                radius: 6
-                color: boxRoot.goldColor
-                opacity: box.highlighted ? 0.45 : 0
-                visible: opacity > 0.01
+            // ─────────────────────────────────────────────────────
+            // 盒身
+            // ─────────────────────────────────────────────────────
+            Item {
+                id: body
 
-                Behavior on opacity {
+                x: 0
+                y: blindRoot.bodyY
+                width: box.width
+                height: blindRoot.bodyHeight
+                z: 1
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.radiusCard
+                    border.width: 1
+                    border.color: Theme.withAlpha(Theme.white, 0.68)
+
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop {
+                            position: 0.0
+                            color: box.mint ? "#C6E5DA" : "#C9DFF8"
+                        }
+                        GradientStop {
+                            position: 0.18
+                            color: box.mint ? "#E2F6EF" : "#E8F3FF"
+                        }
+                        GradientStop {
+                            position: 0.45
+                            color: box.mint ? "#F8FEFB" : "#FBFDFF"
+                        }
+                        GradientStop {
+                            position: 0.72
+                            color: box.mint ? "#D4EFE5" : "#D9EAFC"
+                        }
+                        GradientStop {
+                            position: 1.0
+                            color: box.mint ? "#B7D9CB" : "#BCD6F3"
+                        }
+                    }
+                }
+
+                // 左侧竖向高光，模拟圆柱的立体感
+                Rectangle {
+                    x: 14
+                    y: 16
+                    width: box.width * 0.11
+                    height: body.height - 32
+                    radius: width / 2
+                    opacity: 0.72
+
+                    gradient: Gradient {
+                        orientation: Gradient.Vertical
+                        GradientStop { position: 0.0; color: "#99FFFFFF" }
+                        GradientStop { position: 0.55; color: "#4DFFFFFF" }
+                        GradientStop { position: 1.0; color: "#00FFFFFF" }
+                    }
+                }
+
+                // 底部轻压暗
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 28
+                    radius: Theme.radiusCard
+                    opacity: 0.55
+
+                    gradient: Gradient {
+                        orientation: Gradient.Vertical
+                        GradientStop { position: 0.0; color: "#00000000" }
+                        GradientStop { position: 1.0; color: "#141F2329" }
+                    }
+                }
+
+                // 蓝绿缎带
+                Rectangle {
+                    y: body.height * 0.40
+                    width: body.width
+                    height: 7
+                    gradient: Theme.primaryGradient
+                    opacity: 0.92
+                }
+
+                Rectangle {
+                    y: body.height * 0.40
+                    width: body.width
+                    height: 1
+                    color: Theme.withAlpha(Theme.white, 0.42)
+                }
+
+                // 正面印记：只保留“签”，不使用传统印花
+                Rectangle {
+                    width: Math.max(28, box.width * 0.27)
+                    height: width
+                    radius: width / 2
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: body.height * 0.58 - height / 2
+                    color: "#D9FFFFFF"
+                    border.width: 1
+                    border.color: "#99FFFFFF"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "签"
+                        color: Theme.primary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Math.max(12, Math.round(parent.width * 0.40))
+                        font.weight: Font.DemiBold
+                    }
+                }
+            }
+
+            // ─────────────────────────────────────────────────────
+            // 盒口暗边：盖子飞走后露出
+            // ─────────────────────────────────────────────────────
+            Rectangle {
+                x: body.x + body.width * 0.10
+                y: body.y - 2
+                width: body.width * 0.80
+                height: 8
+                radius: 4
+                color: "#1A1F2329"
+                opacity: 1.0 - box.lidOpacity
+                z: 2.1
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    radius: 3
+                    color: "#0D3B8BF6"
+                }
+            }
+
+            // ─────────────────────────────────────────────────────
+            // 内部强光
+            // ─────────────────────────────────────────────────────
+            Canvas {
+                id: glow
+
+                width: body.width * 1.35
+                height: body.height * 0.95
+                x: body.x + (body.width - width) / 2
+                y: body.y - height * 0.42
+                z: 2.4
+                opacity: box.glowOpacity
+
+                onWidthChanged: requestPaint()
+                onHeightChanged: requestPaint()
+                Component.onCompleted: requestPaint()
+
+                onPaint: {
+                    if (width <= 0 || height <= 0)
+                        return
+
+                    var ctx = getContext("2d")
+                    ctx.clearRect(0, 0, width, height)
+
+                    var cx = width / 2
+                    var cy = height * 0.56
+                    var pi2 = Math.PI * 2
+                    var radius = Math.min(width, height) * 0.52
+
+                    var light = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
+                    light.addColorStop(0, "rgba(255,255,255,0.92)")
+                    light.addColorStop(0.18, "rgba(228,245,255,0.78)")
+                    light.addColorStop(0.45, "rgba(120,200,255,0.28)")
+                    light.addColorStop(0.78, "rgba(59,139,246,0.08)")
+                    light.addColorStop(1, "rgba(59,139,246,0)")
+                    ctx.fillStyle = light
+                    ctx.beginPath()
+                    ctx.arc(cx, cy, radius, 0, pi2)
+                    ctx.fill()
+
+                    var beam = ctx.createLinearGradient(cx, 0, cx, height)
+                    beam.addColorStop(0, "rgba(255,255,255,0)")
+                    beam.addColorStop(0.45, "rgba(255,255,255,0.28)")
+                    beam.addColorStop(1, "rgba(255,255,255,0)")
+                    ctx.fillStyle = beam
+                    ctx.fillRect(cx - width * 0.10, 0, width * 0.20, height)
+                }
+            }
+
+            // ─────────────────────────────────────────────────────
+            // 独立盖子
+            // ─────────────────────────────────────────────────────
+            Item {
+                id: lid
+
+                width: box.width * 1.06
+                height: blindRoot.lidHeight
+                x: (box.width - width) / 2
+                y: -box.lidOffset
+                rotation: box.lidRotation
+                opacity: box.lidOpacity
+                transformOrigin: Item.Center
+                z: 3
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: height / 2
+                    border.width: 1
+                    border.color: Theme.withAlpha(Theme.white, 0.80)
+
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop {
+                            position: 0.0
+                            color: box.mint ? "#E4F8F1" : "#E4F1FF"
+                        }
+                        GradientStop {
+                            position: 0.45
+                            color: "#FFFFFF"
+                        }
+                        GradientStop {
+                            position: 1.0
+                            color: box.mint ? "#CDEDE2" : "#D2E5FA"
+                        }
+                    }
+                }
+
+                Rectangle {
+                    x: 8
+                    y: 3
+                    width: parent.width - 16
+                    height: parent.height * 0.42
+                    radius: height / 2
+                    color: "#66FFFFFF"
+                }
+
+                Rectangle {
+                    x: 8
+                    anchors.bottom: parent.bottom
+                    width: parent.width - 16
+                    height: 1
+                    color: "#141F2329"
+                }
+            }
+
+            // 轻微跳动
+            SequentialAnimation {
+                id: bounceSequence
+
+                PauseAnimation {
+                    id: bouncePause
+                    duration: 0
+                }
+
+                NumberAnimation {
+                    target: box
+                    property: "bounce"
+                    to: 8
+                    duration: 130
+                    easing.type: Easing.OutCubic
+                }
+
+                NumberAnimation {
+                    target: box
+                    property: "bounce"
+                    to: 0
+                    duration: 150
+                    easing.type: Easing.InCubic
+                }
+
+                NumberAnimation {
+                    target: box
+                    property: "bounce"
+                    to: 5
+                    duration: 100
+                    easing.type: Easing.OutCubic
+                }
+
+                NumberAnimation {
+                    target: box
+                    property: "bounce"
+                    to: 0
+                    duration: 130
+                    easing.type: Easing.InCubic
+                }
+            }
+
+            // 盖子弹飞 → 强光 → 卷轴升起
+            SequentialAnimation {
+                id: openSequence
+
+                ParallelAnimation {
                     NumberAnimation {
-                        duration: 120
+                        target: box
+                        property: "lidOffset"
+                        to: blindRoot.boxWidth * 0.95
+                        duration: 480
+                        easing.type: Easing.OutCubic
+                    }
+
+                    NumberAnimation {
+                        target: box
+                        property: "lidRotation"
+                        to: 38
+                        duration: 520
+                        easing.type: Easing.OutCubic
+                    }
+
+                    NumberAnimation {
+                        target: box
+                        property: "lidOpacity"
+                        to: 0
+                        duration: 460
+                        easing.type: Easing.InCubic
+                    }
+
+                    NumberAnimation {
+                        target: box
+                        property: "glowOpacity"
+                        to: 1
+                        duration: 280
+                        easing.type: Easing.OutCubic
+                    }
+                }
+
+                PauseAnimation {
+                    duration: 70
+                }
+
+                ParallelAnimation {
+                    NumberAnimation {
+                        target: box
+                        property: "scrollProgress"
+                        to: 1
+                        duration: 650
+                        easing.type: Easing.OutCubic
+                    }
+
+                    NumberAnimation {
+                        target: box
+                        property: "scrollOpacity"
+                        to: 1
+                        duration: 260
+                        easing.type: Easing.OutCubic
+                    }
+                }
+
+                PauseAnimation {
+                    duration: 140
+                }
+
+                onStopped: {
+                    if (box.opening) {
+                        box.opening = false
+                        box.openFinished()
                     }
                 }
             }

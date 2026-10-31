@@ -1,9 +1,9 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Window
-import QtMultimedia
 
+import "."
 import "pages"
 
 ApplicationWindow {
@@ -11,236 +11,754 @@ ApplicationWindow {
 
     width: 1200
     height: 800
-    minimumWidth: 960
-    minimumHeight: 640
+    minimumWidth: 1000
+    minimumHeight: 680
     visible: true
-    title: qsTr("撷签")
-    color: "#F8F6F0"
-    font.pixelSize: 14
+    title: qsTr("撷签 · 课堂抽签")
+    color: "transparent"
+    flags: Qt.Window | Qt.FramelessWindowHint
+    font.family: Theme.fontFamily
+    font.pixelSize: Theme.fontBody
+
+    background: Rectangle {
+        color: "transparent"
+    }
+
+    readonly property int sidebarWidth: Theme.sidebarWidth
+    readonly property int titleBarHeight: Theme.titleBarHeight
+    readonly property bool isMaximized: visibility === Window.Maximized
+                                             || visibility === Window.FullScreen
+    readonly property bool reducedMotion: {
+        if (typeof backendBridge !== "undefined" && backendBridge)
+            return !backendBridge.motionEnabled
+        return false
+    }
 
     property int currentPage: 0
-    readonly property string audioBase: "qrc:/ui/audio/"
+    property int pendingPage: 0
 
-    // 供子页面调用：点击、旋转、中奖三类音效统一由窗口管理
-    function playClick() {
-        if (!backendBridge.soundEnabled)
-            return;
-        clickSound.stop();
-        clickSound.play();
+    function navigate(page) {
+        var target = Math.max(0, Math.min(4, page))
+        if (target === currentPage && pageStack.currentIndex === target
+                && !pageSwitch.running)
+            return
+
+        currentPage = target
+        pendingPage = target
+
+        if (reducedMotion) {
+            pageSwitch.stop()
+            pageStack.currentIndex = target
+            pageViewport.opacity = 1.0
+            pageStack.y = 0
+            return
+        }
+
+        pageSwitch.restart()
     }
 
-    function playSpin() {
-        if (!backendBridge.soundEnabled)
-            return;
-        spinSound.play();
-    }
-
-    function stopSpin() {
-        spinSound.stop();
-    }
-
-    function playWin() {
-        if (!backendBridge.soundEnabled)
-            return;
-        winSound.stop();
-        winSound.play();
-    }
-
-    function toggleFullScreen() {
-        if (window.visibility === Window.FullScreen)
-            window.showNormal();
+    function toggleMaximize() {
+        if (isMaximized)
+            showNormal()
         else
-            window.showFullScreen();
+            showMaximized()
     }
 
-    Shortcut {
-        sequence: "F11"
-        onActivated: window.toggleFullScreen()
-    }
-
-    Shortcut {
-        sequence: "Esc"
-        onActivated: {
-            if (window.visibility === Window.FullScreen)
-                window.showNormal();
-        }
-    }
-
-    Connections {
-        target: backendBridge
-
-        function onSoundEnabledChanged() {
-            if (!backendBridge.soundEnabled)
-                window.stopSpin();
-        }
-    }
-
-    MediaPlayer {
-        id: clickSound
-
-        source: window.audioBase + "click.wav"
-        audioOutput: AudioOutput {
-            volume: 0.65
-        }
-    }
-
-    MediaPlayer {
-        id: spinSound
-
-        source: window.audioBase + "spin.wav"
-        loops: MediaPlayer.Infinite
-        audioOutput: AudioOutput {
-            volume: 0.35
-        }
-    }
-
-    MediaPlayer {
-        id: winSound
-
-        source: window.audioBase + "win.wav"
-        audioOutput: AudioOutput {
-            volume: 0.85
-        }
-    }
-
-    // 背景底纹：极淡的水墨晕染，位置固定以保证重绘结果稳定
-    Canvas {
+    Rectangle {
+        id: windowPanel
         anchors.fill: parent
+        radius: window.isMaximized ? 0 : Theme.radiusWindow
+        color: Theme.background
+        border.width: window.isMaximized ? 0 : 1
+        border.color: Theme.withAlpha(Theme.textPrimary, 0.06)
+        clip: true
 
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
+        Behavior on radius {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
 
-        onPaint: {
-            var ctx = getContext("2d");
-            ctx.reset();
-            ctx.clearRect(0, 0, width, height);
+        // ─────────────────────────────────────────────────────────
+        // 48px 自绘标题栏 / 透明拖拽区
+        // ─────────────────────────────────────────────────────────
+        Rectangle {
+            id: titleBar
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: window.titleBarHeight
+            color: Theme.surface
+            z: 20
 
-            var blots = [
-                { x: 0.16, y: 0.22, radius: 0.30, color: "63,90,78" },
-                { x: 0.84, y: 0.16, radius: 0.24, color: "45,62,80" },
-                { x: 0.72, y: 0.80, radius: 0.34, color: "63,90,78" },
-                { x: 0.10, y: 0.74, radius: 0.26, color: "45,62,80" },
-                { x: 0.48, y: 0.50, radius: 0.22, color: "107,122,136" }
-            ];
+            MouseArea {
+                id: titleDragArea
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton
 
-            for (var i = 0; i < blots.length; ++i) {
-                var blot = blots[i];
-                var cx = blot.x * width;
-                var cy = blot.y * height;
-                var r = blot.radius * Math.min(width, height);
-                var gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-                gradient.addColorStop(0, "rgba(" + blot.color + ",0.055)");
-                gradient.addColorStop(0.55, "rgba(" + blot.color + ",0.025)");
-                gradient.addColorStop(1, "rgba(" + blot.color + ",0)");
-                ctx.fillStyle = gradient;
-                ctx.beginPath();
-                ctx.arc(cx, cy, r, 0, Math.PI * 2);
-                ctx.fill();
+                property point pressPoint
+                property bool moving: false
+
+                onPressed: function(mouse) {
+                    pressPoint = Qt.point(mouse.x, mouse.y)
+                    moving = false
+                }
+
+                onPositionChanged: function(mouse) {
+                    if (!pressed || moving)
+                        return
+
+                    if (Math.abs(mouse.x - pressPoint.x) > 4
+                            || Math.abs(mouse.y - pressPoint.y) > 4) {
+                        moving = true
+                        window.startSystemMove()
+                    }
+                }
+
+                onReleased: function(mouse) {
+                    moving = false
+                }
+
+                onDoubleClicked: function(mouse) {
+                    window.toggleMaximize()
+                }
+            }
+
+            Row {
+                anchors.left: parent.left
+                anchors.leftMargin: 20
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 10
+
+                Rectangle {
+                    width: 30
+                    height: 30
+                    radius: 9
+                    gradient: Theme.primaryGradient
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: parent.radius
+                        color: "transparent"
+                        border.width: 1
+                        border.color: Theme.withAlpha(Theme.white, 0.20)
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "签"
+                        color: Theme.white
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 16
+                        font.weight: Font.Bold
+                    }
+                }
+
+                Column {
+                    spacing: -1
+
+                    Text {
+                        text: "撷签"
+                        color: Theme.textPrimary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 17
+                        font.weight: Font.Bold
+                    }
+
+                    Text {
+                        text: "XIE QIAN"
+                        color: Theme.textSecondary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 8
+                        font.letterSpacing: 1.7
+                    }
+                }
+            }
+
+            Row {
+                anchors.right: parent.right
+                anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2
+
+                TitleButton {
+                    iconKind: 0
+                    onTriggered: window.showMinimized()
+                }
+
+                TitleButton {
+                    iconKind: 1
+                    restore: window.isMaximized
+                    onTriggered: window.toggleMaximize()
+                }
+
+                TitleButton {
+                    iconKind: 2
+                    danger: true
+                    onTriggered: window.close()
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // 72px 纯白侧边栏
+        // ─────────────────────────────────────────────────────────
+        Rectangle {
+            id: sidebar
+            anchors.top: titleBar.bottom
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            width: window.sidebarWidth
+            color: Theme.surface
+            z: 10
+
+            Column {
+                anchors.top: parent.top
+                anchors.topMargin: 14
+                width: parent.width
+                spacing: 4
+
+                NavItem {
+                    iconKind: 0
+                    label: "转盘"
+                    selected: window.currentPage === 0
+                    onTriggered: window.navigate(0)
+                }
+
+                NavItem {
+                    iconKind: 1
+                    label: "名单"
+                    selected: window.currentPage === 1
+                    onTriggered: window.navigate(1)
+                }
+
+                NavItem {
+                    iconKind: 2
+                    label: "历史"
+                    selected: window.currentPage === 2
+                    onTriggered: window.navigate(2)
+                }
+
+                NavItem {
+                    iconKind: 3
+                    label: "工具"
+                    selected: window.currentPage === 3
+                    onTriggered: window.navigate(3)
+                }
+            }
+
+            NavItem {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 16
+                iconKind: 4
+                label: "设置"
+                selected: window.currentPage === 4
+                onTriggered: window.navigate(4)
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // 内容区
+        // ─────────────────────────────────────────────────────────
+        Item {
+            id: contentArea
+            anchors.top: titleBar.bottom
+            anchors.left: sidebar.right
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            clip: true
+
+            Rectangle {
+                anchors.fill: parent
+                color: Theme.background
+            }
+
+            Item {
+                id: pageViewport
+                anchors.fill: parent
+
+                StackLayout {
+                    id: pageStack
+                    width: parent.width
+                    height: parent.height
+                    currentIndex: 0
+
+                    HomePage {}
+                    RosterPage {}
+                    HistoryPage {}
+                    ToolsPage {}
+                    SettingsPage {}
+                }
+            }
+        }
+
+        SequentialAnimation {
+            id: pageSwitch
+
+            PropertyAnimation {
+                target: pageViewport
+                property: "opacity"
+                to: 0.0
+                duration: 90
+                easing.type: Easing.OutCubic
+            }
+
+            ScriptAction {
+                script: {
+                    pageStack.currentIndex = window.pendingPage
+                    pageStack.y = 8
+                }
+            }
+
+            ParallelAnimation {
+                PropertyAnimation {
+                    target: pageViewport
+                    property: "opacity"
+                    to: 1.0
+                    duration: 180
+                    easing.type: Easing.OutCubic
+                }
+
+                PropertyAnimation {
+                    target: pageStack
+                    property: "y"
+                    to: 0
+                    duration: 240
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // 八方向缩放热区
+        // ─────────────────────────────────────────────────────────
+        Item {
+            anchors.fill: parent
+            z: 10000
+
+            MouseArea {
+                width: parent.width - 24
+                height: 4
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: parent.top
+                enabled: !window.isMaximized
+                cursorShape: Qt.SizeVerCursor
+                onPressed: window.startSystemResize(Qt.TopEdge)
+            }
+
+            MouseArea {
+                width: parent.width - 24
+                height: 4
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                enabled: !window.isMaximized
+                cursorShape: Qt.SizeVerCursor
+                onPressed: window.startSystemResize(Qt.BottomEdge)
+            }
+
+            MouseArea {
+                width: 4
+                height: parent.height - 24
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: parent.left
+                enabled: !window.isMaximized
+                cursorShape: Qt.SizeHorCursor
+                onPressed: window.startSystemResize(Qt.LeftEdge)
+            }
+
+            MouseArea {
+                width: 4
+                height: parent.height - 24
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                enabled: !window.isMaximized
+                cursorShape: Qt.SizeHorCursor
+                onPressed: window.startSystemResize(Qt.RightEdge)
+            }
+
+            MouseArea {
+                width: 12
+                height: 12
+                anchors.left: parent.left
+                anchors.top: parent.top
+                enabled: !window.isMaximized
+                cursorShape: Qt.SizeFDiagCursor
+                onPressed: window.startSystemResize(Qt.LeftEdge | Qt.TopEdge)
+            }
+
+            MouseArea {
+                width: 12
+                height: 12
+                anchors.right: parent.right
+                anchors.top: parent.top
+                enabled: !window.isMaximized
+                cursorShape: Qt.SizeBDiagCursor
+                onPressed: window.startSystemResize(Qt.RightEdge | Qt.TopEdge)
+            }
+
+            MouseArea {
+                width: 12
+                height: 12
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                enabled: !window.isMaximized
+                cursorShape: Qt.SizeBDiagCursor
+                onPressed: window.startSystemResize(Qt.LeftEdge | Qt.BottomEdge)
+            }
+
+            MouseArea {
+                width: 12
+                height: 12
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                enabled: !window.isMaximized
+                cursorShape: Qt.SizeFDiagCursor
+                onPressed: window.startSystemResize(Qt.RightEdge | Qt.BottomEdge)
             }
         }
     }
 
-    RowLayout {
-        anchors.fill: parent
-        spacing: 0
+    // ═════════════════════════════════════════════════════════════
+    // 侧栏图标
+    // ═════════════════════════════════════════════════════════════
+    component NavIcon: Canvas {
+        id: icon
 
-        // 左侧导航栏
+        width: 22
+        height: 22
+
+        property int kind: 0
+        property color strokeColor: Theme.textSecondary
+        property real strokeWidth: 1.6
+
+        onKindChanged: requestPaint()
+        onStrokeColorChanged: requestPaint()
+        Component.onCompleted: requestPaint()
+
+        onPaint: {
+            var ctx = getContext("2d")
+            ctx.clearRect(0, 0, width, height)
+            ctx.strokeStyle = strokeColor
+            ctx.fillStyle = strokeColor
+            ctx.lineWidth = strokeWidth
+            ctx.lineCap = "round"
+            ctx.lineJoin = "round"
+
+            var cx = width / 2
+            var cy = height / 2
+            var i
+            var angle
+
+            if (kind === 0) {
+                ctx.beginPath()
+                ctx.arc(cx, cy, 7.8, 0, Math.PI * 2)
+                ctx.stroke()
+
+                for (i = 0; i < 6; ++i) {
+                    angle = -Math.PI / 2 + i * Math.PI / 3
+                    ctx.beginPath()
+                    ctx.moveTo(cx, cy)
+                    ctx.lineTo(cx + Math.cos(angle) * 7.8,
+                               cy + Math.sin(angle) * 7.8)
+                    ctx.stroke()
+                }
+
+                ctx.beginPath()
+                ctx.arc(cx, cy, 1.7, 0, Math.PI * 2)
+                ctx.fill()
+
+                ctx.beginPath()
+                ctx.moveTo(cx, cy - 10.4)
+                ctx.lineTo(cx - 2.7, cy - 7.2)
+                ctx.lineTo(cx + 2.7, cy - 7.2)
+                ctx.closePath()
+                ctx.fill()
+            } else if (kind === 1) {
+                var rows = [6, 11, 16]
+                for (i = 0; i < 3; ++i) {
+                    ctx.beginPath()
+                    ctx.arc(5.2, rows[i], 1.5, 0, Math.PI * 2)
+                    ctx.fill()
+
+                    ctx.beginPath()
+                    ctx.moveTo(9.6, rows[i])
+                    ctx.lineTo(i === 2 ? 14.5 : 18.2, rows[i])
+                    ctx.stroke()
+                }
+            } else if (kind === 2) {
+                ctx.beginPath()
+                ctx.arc(cx, cy, 8.1, 0, Math.PI * 2)
+                ctx.stroke()
+
+                ctx.beginPath()
+                ctx.moveTo(cx, cy)
+                ctx.lineTo(cx, cy - 4.6)
+                ctx.stroke()
+
+                ctx.beginPath()
+                ctx.moveTo(cx, cy)
+                ctx.lineTo(cx + 3.3, cy + 2.1)
+                ctx.stroke()
+
+                ctx.beginPath()
+                ctx.arc(cx, cy, 1.4, 0, Math.PI * 2)
+                ctx.fill()
+            } else if (kind === 3) {
+                var ys = [5.8, 11, 16.2]
+                var knobs = [8.4, 14.3, 10.4]
+                for (i = 0; i < 3; ++i) {
+                    ctx.beginPath()
+                    ctx.moveTo(3.8, ys[i])
+                    ctx.lineTo(knobs[i] - 3.2, ys[i])
+                    ctx.moveTo(knobs[i] + 3.2, ys[i])
+                    ctx.lineTo(18.2, ys[i])
+                    ctx.stroke()
+
+                    ctx.beginPath()
+                    ctx.arc(knobs[i], ys[i], 2.4, 0, Math.PI * 2)
+                    ctx.stroke()
+                }
+            } else {
+                ctx.beginPath()
+                ctx.arc(cx, cy, 6.3, 0, Math.PI * 2)
+                ctx.stroke()
+
+                for (i = 0; i < 8; ++i) {
+                    angle = i * Math.PI / 4
+                    ctx.beginPath()
+                    ctx.moveTo(cx + Math.cos(angle) * 6.3,
+                               cy + Math.sin(angle) * 6.3)
+                    ctx.lineTo(cx + Math.cos(angle) * 8.4,
+                               cy + Math.sin(angle) * 8.4)
+                    ctx.stroke()
+                }
+
+                ctx.beginPath()
+                ctx.arc(cx, cy, 2.6, 0, Math.PI * 2)
+                ctx.stroke()
+            }
+        }
+    }
+
+    component NavItem: Item {
+        id: nav
+
+        width: 72
+        height: 64
+
+        property bool selected: false
+        property int iconKind: 0
+        property string label: ""
+        signal triggered()
+
         Rectangle {
-            Layout.fillHeight: true
-            Layout.preferredWidth: 80
-            color: "#2D3E50"
+            id: navHalo
+            width: 52
+            height: 54
+            radius: 14
+            anchors.centerIn: parent
+            color: nav.selected
+                   ? Theme.primarySoft
+                   : (navMouse.containsMouse ? Theme.surfaceAlt : Theme.transparent)
+            scale: navMouse.pressed
+                   ? 0.92
+                   : (navMouse.containsMouse ? 1.02 : 1.0)
 
-            Column {
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.top: parent.top
-                anchors.topMargin: 28
-                spacing: 4
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "签"
-                    color: "#F8F6F0"
-                    font.pixelSize: 26
+            Behavior on color {
+                ColorAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
                 }
+            }
 
-                Item {
-                    width: 1
-                    height: 36
+            Behavior on scale {
+                NumberAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
                 }
+            }
+        }
 
-                Repeater {
-                    model: [
-                        { symbol: "抽", name: "抽奖" },
-                        { symbol: "名", name: "名单" },
-                        { symbol: "史", name: "历史" },
-                        { symbol: "具", name: "教学工具" },
-                        { symbol: "设", name: "设置" },
-                        { symbol: "关", name: "关于" }
-                    ]
+        Column {
+            width: parent.width
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 3
 
-                    delegate: Rectangle {
-                        id: navItem
+            Item {
+                width: parent.width
+                height: 22
 
-                        width: 80
-                        height: 72
-                        color: {
-                            if (window.currentPage === index)
-                                return "#22303F"
-                            return hoverArea.containsMouse ? "#28394A" : "transparent"
-                        }
+                NavIcon {
+                    anchors.centerIn: parent
+                    width: 22
+                    height: 22
+                    kind: nav.iconKind
+                    strokeColor: nav.selected
+                                 ? Theme.primary
+                                 : (navMouse.containsMouse
+                                    ? Theme.textPrimary
+                                    : Theme.textSecondary)
+                }
+            }
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: modelData.symbol
-                            color: window.currentPage === index ? "#F8F6F0" : "#A4B0BE"
-                            font.pixelSize: 20
-                        }
+            Text {
+                width: parent.width
+                text: nav.label
+                horizontalAlignment: Text.AlignHCenter
+                color: nav.selected ? Theme.primary : Theme.textSecondary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontMicro
+                font.weight: nav.selected ? Font.DemiBold : Font.Normal
 
-                        Rectangle {
-                            visible: window.currentPage === index
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 2
-                            height: 26
-                            color: "#C9B48C"
-                        }
-
-                        MouseArea {
-                            id: hoverArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: window.currentPage = index
-                        }
+                Behavior on color {
+                    ColorAnimation {
+                        duration: Theme.durationFast
+                        easing.type: Easing.OutCubic
                     }
                 }
             }
         }
 
-        // 导航与内容区的分隔线
         Rectangle {
-            Layout.fillHeight: true
-            Layout.preferredWidth: 1
-            color: "#E4DFD3"
+            width: 4
+            height: nav.selected ? 28 : 0
+            radius: 2
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            opacity: nav.selected ? 1.0 : 0.0
+
+            gradient: Gradient {
+                orientation: Gradient.Vertical
+                GradientStop { position: 0.0; color: Theme.primary }
+                GradientStop { position: 1.0; color: Theme.primaryEnd }
+            }
+
+            Behavior on height {
+                NumberAnimation {
+                    duration: Theme.durationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
+            }
         }
 
-        // 右侧主内容区
-        StackLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            currentIndex: window.currentPage
+        MouseArea {
+            id: navMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: nav.triggered()
+        }
+    }
 
-            HomePage {}
+    component TitleButton: Item {
+        id: control
 
-            RosterPage {}
+        width: 40
+        height: 32
 
-            HistoryPage {}
+        property int iconKind: 0
+        property bool restore: false
+        property bool danger: false
+        signal triggered()
 
-            ToolsPage {}
+        Rectangle {
+            id: controlBackground
+            anchors.fill: parent
+            radius: Theme.radiusControl
+            color: mouse.containsMouse
+                   ? (control.danger ? Theme.dangerHover : Theme.surfaceAlt)
+                   : Theme.transparent
+            scale: mouse.pressed ? 0.92 : 1.0
 
-            SettingsPage {}
+            Behavior on color {
+                ColorAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
+            }
 
-            AboutPage {}
+            Behavior on scale {
+                NumberAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Canvas {
+                id: glyph
+                width: 18
+                height: 18
+                anchors.centerIn: parent
+
+                property int kind: control.iconKind
+                property bool showRestore: control.restore
+                property color iconColor: (control.danger && mouse.containsMouse)
+                                          ? Theme.white
+                                          : Theme.textPrimary
+
+                onKindChanged: requestPaint()
+                onShowRestoreChanged: requestPaint()
+                onIconColorChanged: requestPaint()
+                Component.onCompleted: requestPaint()
+
+                onPaint: {
+                    var ctx = getContext("2d")
+                    ctx.clearRect(0, 0, width, height)
+                    ctx.strokeStyle = iconColor
+                    ctx.lineWidth = 1.25
+                    ctx.lineCap = "round"
+                    ctx.lineJoin = "round"
+
+                    if (kind === 0) {
+                        ctx.beginPath()
+                        ctx.moveTo(4, 9)
+                        ctx.lineTo(14, 9)
+                        ctx.stroke()
+                    } else if (kind === 1) {
+                        if (!showRestore) {
+                            ctx.strokeRect(4.5, 4.5, 9, 9)
+                        } else {
+                            ctx.beginPath()
+                            ctx.moveTo(6.5, 3.5)
+                            ctx.lineTo(14, 3.5)
+                            ctx.lineTo(14, 11)
+                            ctx.stroke()
+
+                            ctx.beginPath()
+                            ctx.moveTo(3.5, 6.5)
+                            ctx.lineTo(3.5, 14)
+                            ctx.lineTo(11, 14)
+                            ctx.lineTo(11, 6.5)
+                            ctx.closePath()
+                            ctx.stroke()
+                        }
+                    } else {
+                        ctx.beginPath()
+                        ctx.moveTo(4.5, 4.5)
+                        ctx.lineTo(13.5, 13.5)
+                        ctx.moveTo(13.5, 4.5)
+                        ctx.lineTo(4.5, 13.5)
+                        ctx.stroke()
+                    }
+                }
+            }
+        }
+
+        MouseArea {
+            id: mouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.ArrowCursor
+            onClicked: control.triggered()
         }
     }
 }

@@ -1,401 +1,465 @@
 import QtQuick
 
+import ".."
+
+/*!
+    现代翻牌抽签组件。
+    - 6 张 3:4 圆角卡片，radius 16
+    - 卡背纯白 + 极淡对角线蓝绿微光 + 极简几何线条
+    - startFlip()：PathAnimation 发牌 → 选中一张 → Y 轴 3D 翻转 0→180°
+    - 发牌结束发出 shuffleFinished()，供外部在此期间写入 winnerName
+    - 翻转结束发出 finished()
+*/
 Item {
     id: flipRoot
 
-    property color paperColor: "#F8F6F0"
-    property color cardColor: "#FBF6E9"
-    property color daiColor: "#2D3E50"
-    property color bambooColor: "#3F5A4E"
-    property color goldColor: "#D4AF37"
+    implicitWidth: 680
+    implicitHeight: 380
 
-    property int cardCount: 6
-    property bool showPointer: true
+    readonly property int cardCount: 6
+    readonly property real cardWidth: Math.max(0, Math.min(width * 0.14, height * 0.28))
+    readonly property real cardHeight: cardWidth * 4 / 3
+    readonly property real cardSpacing: cardWidth * 0.22
+    readonly property real fanWidth: cardCount * cardWidth
+                                           + (cardCount - 1) * cardSpacing
+    readonly property real fanStartX: (width - fanWidth) / 2
+    readonly property real fanBaseY: (height - cardHeight) / 2
 
-    readonly property bool reducedMotion: !backendBridge.motionEnabled
+    readonly property bool running: (!!masterAnimation && masterAnimation.running) || (!!flipAnimation && flipAnimation.running)
 
-    readonly property real availableWidth: 680
-    readonly property real cardSpacing: cardCount <= 6 ? 22 : 12
-    readonly property real cardWidth: Math.min(92, Math.floor((availableWidth - cardSpacing * (cardCount - 1)) / cardCount))
-    readonly property real cardHeight: Math.round(cardWidth * 2.065)
-
-    // 洗牌位移与整体抖动由动画驱动，卡牌位置直接绑定这两个值
-    property real spread: 0
-    property real shake: 0
-    property var winnerNames: []
-    property var flippedIndices: []
+    property string winnerName: ""
+    property int selectedIndex: -1
+    property bool flipActive: false
+    property bool settled: false
 
     signal shuffleFinished()
-    signal revealFinished()
+    signal finished()
 
-    implicitWidth: cardCount * cardWidth + (cardCount - 1) * cardSpacing
-    implicitHeight: cardHeight + 56
+    function startFlip() {
+        if (running)
+            return
 
-    function startAnimation() {
-        reset();
-        shuffleAnimation.start();
-    }
+        reset()
+        flipActive = true
 
-    function reveal(names) {
-        winnerNames = names;
-
-        var pool = [];
+        // 随机发牌顺序，让洗牌过程更有随机感
+        var order = []
         for (var i = 0; i < cardCount; ++i)
-            pool.push(i);
-        for (var k = pool.length - 1; k > 0; --k) {
-            var j = Math.floor(Math.random() * (k + 1));
-            var swap = pool[k];
-            pool[k] = pool[j];
-            pool[j] = swap;
+            order.push(i)
+        for (var k = order.length - 1; k > 0; --k) {
+            var j = Math.floor(Math.random() * (k + 1))
+            var swap = order[k]
+            order[k] = order[j]
+            order[j] = swap
         }
-        flippedIndices = pool.slice(0, Math.min(names.length, cardCount));
-        flipAnimation.start();
+
+        for (var n = 0; n < cardCount; ++n) {
+            var card = cardRepeater.itemAt(n)
+            if (card)
+                card.deal(order[n])
+        }
+
+        masterAnimation.start()
     }
 
     function reset() {
-        winnerNames = [];
-        flippedIndices = [];
-        spread = 0;
-        shake = 0;
+        flipActive = false
+        settled = false
+        selectedIndex = -1
+        masterAnimation.stop()
+        flipAnimation.stop()
+
         for (var i = 0; i < cardRepeater.count; ++i) {
-            var card = cardRepeater.itemAt(i);
-            if (card) {
-                card.flipAngle = 0;
-                card.lifted = false;
-            }
+            var card = cardRepeater.itemAt(i)
+            if (card)
+                card.resetCard()
         }
     }
 
+    function selectRandomCard() {
+        selectedIndex = Math.floor(Math.random() * cardCount)
+    }
+
+    function beginFlip() {
+        var slot = cardRepeater.itemAt(selectedIndex)
+        if (!slot || !slot.cardItem) {
+            flipActive = false
+            settled = true
+            finished()
+            return
+        }
+
+        var targetCard = slot.cardItem
+        flipAngleAnimation.target = targetCard
+        flipAngleAnimation.from = targetCard.flipAngle
+        flipLiftAnimation.target = targetCard
+        flipLiftAnimation.from = targetCard.lift
+        flipAnimation.start()
+    }
+
+    function resetDeck() {
+        if (!cardRepeater)
+            return
+
+        for (var i = 0; i < cardRepeater.count; ++i) {
+            var card = cardRepeater.itemAt(i)
+            if (card)
+                card.resetCard()
+        }
+    }
+
+    onWidthChanged: {
+        if (!running && !settled)
+            resetDeck()
+    }
+
+    onHeightChanged: {
+        if (!running && !settled)
+            resetDeck()
+    }
+
+    // 发牌总时长约 925ms，留一点缓冲后进入翻牌阶段
     SequentialAnimation {
-        id: shuffleAnimation
+        id: masterAnimation
 
-        NumberAnimation {
-            target: flipRoot
-            property: "shake"
-            from: 0
-            to: -9
-            duration: reducedMotion ? 20 : 60
+        PauseAnimation {
+            duration: 1000
         }
-        NumberAnimation {
-            target: flipRoot
-            property: "shake"
-            from: -9
-            to: 9
-            duration: reducedMotion ? 25 : 80
-        }
-        NumberAnimation {
-            target: flipRoot
-            property: "shake"
-            from: 9
-            to: -6
-            duration: reducedMotion ? 20 : 70
-        }
-        NumberAnimation {
-            target: flipRoot
-            property: "shake"
-            from: -6
-            to: 0
-            duration: reducedMotion ? 20 : 70
-        }
-        SequentialAnimation {
-            loops: 3
 
-            NumberAnimation {
-                target: flipRoot
-                property: "spread"
-                from: 0
-                to: 62
-                duration: reducedMotion ? 40 : 150
-                easing.type: Easing.InOutQuad
-            }
-            NumberAnimation {
-                target: flipRoot
-                property: "spread"
-                from: 62
-                to: 0
-                duration: reducedMotion ? 40 : 150
-                easing.type: Easing.InOutQuad
-            }
-        }
         ScriptAction {
-            script: flipRoot.shuffleFinished()
+            script: {
+                flipRoot.shuffleFinished()
+                flipRoot.selectRandomCard()
+            }
+        }
+
+        PauseAnimation {
+            duration: 260
+        }
+
+        ScriptAction {
+            script: flipRoot.beginFlip()
         }
     }
 
-    SequentialAnimation {
+    ParallelAnimation {
         id: flipAnimation
 
-        PauseAnimation {
-            duration: reducedMotion ? 30 : 140
+        NumberAnimation {
+            id: flipAngleAnimation
+            property: "flipAngle"
+            to: 180
+            duration: 760
+            easing.type: Easing.InOutCubic
         }
-        ScriptAction {
-            script: {
-                for (var i = 0; i < flipRoot.flippedIndices.length; ++i) {
-                    var card = cardRepeater.itemAt(flipRoot.flippedIndices[i]);
-                    if (card)
-                        card.lifted = true;
-                }
+
+        NumberAnimation {
+            id: flipLiftAnimation
+            property: "lift"
+            to: 18
+            duration: 360
+            easing.type: Easing.OutCubic
+        }
+
+        onStopped: {
+            if (flipRoot.flipActive) {
+                flipRoot.flipActive = false
+                flipRoot.settled = true
+                flipRoot.finished()
             }
-        }
-        PauseAnimation {
-            duration: reducedMotion ? 40 : 200
-        }
-        ScriptAction {
-            script: {
-                for (var i = 0; i < flipRoot.flippedIndices.length; ++i) {
-                    var card = cardRepeater.itemAt(flipRoot.flippedIndices[i]);
-                    if (card)
-                        card.flipAngle = 180;
-                }
-            }
-        }
-        PauseAnimation {
-            duration: reducedMotion ? 180 : 760
-        }
-        ScriptAction {
-            script: flipRoot.revealFinished()
         }
     }
 
     Repeater {
         id: cardRepeater
-
         model: flipRoot.cardCount
 
         delegate: Item {
-            id: card
-
-            property real flipAngle: 0
-            property bool lifted: false
-            property real bob: 0
-
-            readonly property real baseX: index * (flipRoot.cardWidth + flipRoot.cardSpacing)
-            readonly property real faceScale: flipRoot.cardWidth / 92
-            readonly property int winnerIndex: flipRoot.flippedIndices.indexOf(index)
-            readonly property string userName: winnerIndex >= 0 ? flipRoot.winnerNames[winnerIndex] : ""
+            id: slot
 
             width: flipRoot.cardWidth
             height: flipRoot.cardHeight
-            x: baseX + (index % 2 === 0 ? -flipRoot.spread : flipRoot.spread) + flipRoot.shake
-            y: (flipRoot.height - height) / 2 - (lifted ? 18 : 0)
-            z: winnerIndex >= 0 ? 10 : (index % 2)
+            x: flipRoot.fanStartX
+               + index * (flipRoot.cardWidth + flipRoot.cardSpacing)
+            y: flipRoot.fanBaseY
+               + Math.abs(offset) * (flipRoot.cardHeight * 0.05)
 
-            transform: Translate {
-                y: card.bob + (index % 2 === 0 ? -7 : 7)
-            }
+            readonly property real offset: index - (flipRoot.cardCount - 1) / 2
+            readonly property bool selected: flipRoot.selectedIndex === index
+            readonly property real deckX: flipRoot.width / 2 - x - flipRoot.cardWidth / 2
+            readonly property real deckY: flipRoot.height / 2 - y - flipRoot.cardHeight / 2
+            readonly property Item cardItem: card
 
-            Behavior on y {
+            rotation: selected ? 0 : offset * 4.0
+            z: selected ? 30 : 20 - Math.abs(offset)
+
+            Behavior on rotation {
                 NumberAnimation {
-                    duration: reducedMotion ? 80 : 240
+                    duration: 240
                     easing.type: Easing.OutCubic
                 }
             }
-            Behavior on flipAngle {
-                NumberAnimation {
-                    duration: reducedMotion ? 150 : 720
-                    easing.type: Easing.OutCubic
-                }
-            }
 
-            SequentialAnimation on bob {
-                loops: Animation.Infinite
-
-                NumberAnimation {
-                    to: 5
-                    duration: 1500 + index * 220
-                    easing.type: Easing.InOutSine
-                }
-                NumberAnimation {
-                    to: -5
-                    duration: 1500 + index * 220
-                    easing.type: Easing.InOutSine
-                }
-            }
-
-            // 卡背：宣纸底 + 对称几何暗纹
             Item {
-                id: backFace
+                id: card
 
-                anchors.fill: parent
-                visible: card.flipAngle <= 90
+                width: slot.width
+                height: slot.height
+                x: slot.deckX
+                y: slot.deckY
+                z: slot.selected ? 50 : 0
 
-                transform: Rotation {
-                    origin.x: backFace.width / 2
-                    origin.y: backFace.height / 2
-                    axis {
-                        x: 0
-                        y: 1
-                        z: 0
+                property real flipAngle: 0
+                property real lift: 0
+                readonly property real startX: slot.deckX
+                readonly property real startY: slot.deckY
+
+                scale: 1 + lift * 0.0035
+
+                transform: [
+                    Rotation {
+                        axis.x: 0
+                        axis.y: 1
+                        axis.z: 0
+                        angle: card.flipAngle
+                        origin.x: card.width / 2
+                        origin.y: card.height / 2
+                    },
+                    Translate {
+                        y: -card.lift
                     }
-                    angle: card.flipAngle
-                }
+                ]
 
+                // 卡片底部的极淡投影
                 Rectangle {
-                    anchors.fill: parent
-                    radius: 6
-                    color: flipRoot.cardColor
-                    border.width: 1
-                    border.color: flipRoot.goldColor
+                    x: 0
+                    y: 4
+                    width: parent.width
+                    height: parent.height
+                    radius: 16
+                    color: "#0A000000"
+                    z: -1
                 }
 
+                // ─────────────────────────────────────────────
+                // 卡背
+                // ─────────────────────────────────────────────
                 Canvas {
+                    id: backCanvas
                     anchors.fill: parent
-                    anchors.margins: Math.max(3, Math.round(8 * card.faceScale))
+                    visible: card.flipAngle < 90
 
                     onWidthChanged: requestPaint()
                     onHeightChanged: requestPaint()
+                    Component.onCompleted: requestPaint()
+
+                    function roundedRect(ctx, x, y, w, h, r) {
+                        var radius = Math.min(r, w / 2, h / 2)
+                        ctx.beginPath()
+                        ctx.moveTo(x + radius, y)
+                        ctx.lineTo(x + w - radius, y)
+                        ctx.quadraticCurveTo(x + w, y, x + w, y + radius)
+                        ctx.lineTo(x + w, y + h - radius)
+                        ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h)
+                        ctx.lineTo(x + radius, y + h)
+                        ctx.quadraticCurveTo(x, y + h, x, y + h - radius)
+                        ctx.lineTo(x, y + radius)
+                        ctx.quadraticCurveTo(x, y, x + radius, y)
+                        ctx.closePath()
+                    }
 
                     onPaint: {
-                        var ctx = getContext("2d");
-                        ctx.reset();
-                        ctx.strokeStyle = "#C9A63E";
-                        ctx.globalAlpha = 0.36;
+                        if (width <= 0 || height <= 0)
+                            return
 
-                        var cx = width / 2;
-                        var cy = height / 2;
-                        var unit = Math.min(width, height);
-                        ctx.lineWidth = Math.max(0.6, unit / 120);
+                        var ctx = getContext("2d")
+                        ctx.clearRect(0, 0, width, height)
 
-                        // 三层菱形骨架，重心固定在卡面中心
-                        function diamond(rx, ry) {
-                            ctx.beginPath();
-                            ctx.moveTo(cx, cy - ry);
-                            ctx.lineTo(cx + rx, cy);
-                            ctx.lineTo(cx, cy + ry);
-                            ctx.lineTo(cx - rx, cy);
-                            ctx.closePath();
-                            ctx.stroke();
-                        }
+                        var w = width
+                        var h = height
+                        var pi2 = Math.PI * 2
 
-                        diamond(width * 0.46, height * 0.46);
-                        diamond(width * 0.36, height * 0.36);
-                        diamond(width * 0.26, height * 0.26);
+                        // 圆角裁切
+                        ctx.save()
+                        roundedRect(ctx, 0.5, 0.5, w - 1, h - 1, 16)
+                        ctx.clip()
 
-                        // 中心双环 + 贯穿十字
-                        ctx.beginPath();
-                        ctx.arc(cx, cy, unit * 0.15, 0, Math.PI * 2);
-                        ctx.stroke();
-                        ctx.beginPath();
-                        ctx.arc(cx, cy, unit * 0.08, 0, Math.PI * 2);
-                        ctx.stroke();
-                        ctx.beginPath();
-                        ctx.moveTo(cx, cy - height * 0.46);
-                        ctx.lineTo(cx, cy + height * 0.46);
-                        ctx.moveTo(cx - width * 0.46, cy);
-                        ctx.lineTo(cx + width * 0.46, cy);
-                        ctx.stroke();
+                        // 纯白至蓝绿的对角微光
+                        var base = ctx.createLinearGradient(0, 0, w, h)
+                        base.addColorStop(0, "#FFFFFF")
+                        base.addColorStop(0.55, "#F9FCFF")
+                        base.addColorStop(1, "#EAF7F2")
+                        ctx.fillStyle = base
+                        ctx.fillRect(0, 0, w, h)
 
-                        // 四角回纹：中心对称的方折线
-                        function corner(sx, sy) {
-                            var x = cx + sx * width * 0.40;
-                            var y = cy + sy * height * 0.40;
-                            var dx = width * 0.12;
-                            var dy = height * 0.12;
-                            ctx.beginPath();
-                            ctx.moveTo(x, y);
-                            ctx.lineTo(x - sx * dx * 0.45, y);
-                            ctx.lineTo(x - sx * dx * 0.45, y - sy * dy * 0.45);
-                            ctx.lineTo(x - sx * dx, y - sy * dy * 0.45);
-                            ctx.lineTo(x - sx * dx, y - sy * dy);
-                            ctx.stroke();
-                        }
+                        // 一道很淡的对角高光
+                        var sheen = ctx.createLinearGradient(0, h, w, 0)
+                        sheen.addColorStop(0, "rgba(255,255,255,0)")
+                        sheen.addColorStop(0.44, "rgba(255,255,255,0.48)")
+                        sheen.addColorStop(0.58, "rgba(255,255,255,0)")
+                        sheen.addColorStop(1, "rgba(255,255,255,0)")
+                        ctx.fillStyle = sheen
+                        ctx.fillRect(0, 0, w, h)
 
-                        corner(1, 1);
-                        corner(1, -1);
-                        corner(-1, 1);
-                        corner(-1, -1);
+                        var cx = w / 2
+                        var cy = h / 2
+                        var d = Math.min(w, h) * 0.19
 
-                        // 上下镜像的弧形交织
-                        for (var i = 0; i < 3; ++i) {
-                            var offset = unit * (0.10 + i * 0.07);
-                            ctx.beginPath();
-                            ctx.arc(cx, cy - height * 0.5 + offset, unit * 0.34, 0.35, Math.PI - 0.35);
-                            ctx.stroke();
-                            ctx.beginPath();
-                            ctx.arc(cx, cy + height * 0.5 - offset, unit * 0.34, Math.PI + 0.35, -0.35, true);
-                            ctx.stroke();
-                        }
+                        // 极简几何：菱形 + 横线 + 微光点
+                        ctx.strokeStyle = "rgba(59,139,246,0.28)"
+                        ctx.lineWidth = 1.2
+                        ctx.beginPath()
+                        ctx.moveTo(cx, cy - d)
+                        ctx.lineTo(cx + d * 0.72, cy)
+                        ctx.lineTo(cx, cy + d)
+                        ctx.lineTo(cx - d * 0.72, cy)
+                        ctx.closePath()
+                        ctx.stroke()
+
+                        ctx.strokeStyle = "rgba(46,212,165,0.24)"
+                        ctx.beginPath()
+                        ctx.moveTo(cx - d * 0.50, cy)
+                        ctx.lineTo(cx + d * 0.50, cy)
+                        ctx.stroke()
+
+                        ctx.strokeStyle = "rgba(46,212,165,0.16)"
+                        ctx.lineWidth = 1
+                        ctx.beginPath()
+                        ctx.moveTo(w * 0.22, h * 0.76)
+                        ctx.lineTo(w * 0.40, h * 0.58)
+                        ctx.moveTo(w * 0.60, h * 0.42)
+                        ctx.lineTo(w * 0.78, h * 0.24)
+                        ctx.stroke()
+
+                        ctx.beginPath()
+                        ctx.arc(cx, cy, 2.6, 0, pi2)
+                        ctx.fillStyle = "rgba(59,139,246,0.45)"
+                        ctx.fill()
+
+                        ctx.restore()
+
+                        // 外边框
+                        roundedRect(ctx, 0.5, 0.5, w - 1, h - 1, 16)
+                        ctx.strokeStyle = "rgba(31,35,41,0.08)"
+                        ctx.lineWidth = 1
+                        ctx.stroke()
                     }
                 }
 
+                // ─────────────────────────────────────────────
+                // 正面
+                // ─────────────────────────────────────────────
                 Rectangle {
-                    anchors.centerIn: parent
-                    width: parent.width - Math.max(8, Math.round(22 * card.faceScale))
-                    height: parent.height - Math.max(8, Math.round(22 * card.faceScale))
-                    radius: 4
-                    color: "transparent"
+                    id: frontFace
+                    anchors.fill: parent
+                    radius: 16
+                    visible: card.flipAngle >= 90
                     border.width: 1
-                    border.color: "#E3D3A3"
-                }
-            }
+                    border.color: Theme.withAlpha(Theme.textPrimary, 0.07)
 
-            // 卡面：中奖者姓名
-            Item {
-                id: frontFace
-
-                anchors.fill: parent
-                visible: card.flipAngle > 90
-
-                transform: Rotation {
-                    origin.x: frontFace.width / 2
-                    origin.y: frontFace.height / 2
-                    axis {
-                        x: 0
-                        y: 1
-                        z: 0
+                    gradient: Gradient {
+                        orientation: Gradient.Vertical
+                        GradientStop { position: 0.0; color: Theme.surface }
+                        GradientStop { position: 0.72; color: "#FBFEFC" }
+                        GradientStop { position: 1.0; color: Theme.primarySoftGreen }
                     }
-                    angle: card.flipAngle - 180
-                }
 
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 6
-                    color: flipRoot.paperColor
-                    border.width: 1
-                    border.color: flipRoot.bambooColor
-                }
+                    transform: Rotation {
+                        axis.x: 0
+                        axis.y: 1
+                        axis.z: 0
+                        angle: 180
+                        origin.x: frontFace.width / 2
+                        origin.y: frontFace.height / 2
+                    }
 
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: Math.max(2, Math.round(6 * card.faceScale))
-                    radius: 4
-                    color: "transparent"
-                    border.width: 1
-                    border.color: "#D9D0BC"
-                }
+                    Column {
+                        width: Math.max(0, parent.width - 16)
+                        anchors.centerIn: parent
+                        spacing: 6
 
-                Text {
-                    anchors.top: parent.top
-                    anchors.topMargin: Math.round(12 * card.faceScale)
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "签"
-                    color: flipRoot.goldColor
-                    font.pixelSize: Math.max(8, Math.round(12 * card.faceScale))
-                    opacity: 0.8
-                }
+                        Item {
+                            width: parent.width
+                            height: 3
 
-                Text {
-                    anchors.centerIn: parent
-                    width: parent.width - 16
-                    text: card.userName
-                    visible: card.winnerIndex >= 0
-                    color: flipRoot.daiColor
-                    font.pixelSize: Math.max(13, Math.round((card.userName.length > 2 ? 26 : 32) * card.faceScale))
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.Wrap
-                    lineHeight: 1.15
+                            Rectangle {
+                                width: 24
+                                height: 3
+                                radius: 1.5
+                                anchors.centerIn: parent
+                                gradient: Theme.primaryGradient
+                            }
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: "抽中"
+                            horizontalAlignment: Text.AlignHCenter
+                            color: Theme.textSecondary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 9
+                            font.letterSpacing: 2
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: flipRoot.winnerName.length > 0
+                                  ? flipRoot.winnerName
+                                  : "幸运签"
+                            horizontalAlignment: Text.AlignHCenter
+                            color: Theme.textPrimary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 18
+                            font.weight: Font.Bold
+                            elide: Text.ElideRight
+                        }
+                    }
                 }
             }
 
-            Rectangle {
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.top: parent.top
-                anchors.topMargin: -26
-                width: 14
-                height: 14
-                rotation: 45
-                color: flipRoot.goldColor
-                visible: flipRoot.showPointer && card.winnerIndex >= 0
+            function deal(order) {
+                resetCard()
+                dealPause.duration = order * 55
+                dealSequence.start()
+            }
+
+            function resetCard() {
+                if (dealSequence)
+                    dealSequence.stop()
+                card.flipAngle = 0
+                card.lift = 0
+                card.x = card.startX
+                card.y = card.startY
+            }
+
+            SequentialAnimation {
+                id: dealSequence
+
+                PauseAnimation {
+                    id: dealPause
+                    duration: 0
+                }
+
+                PathAnimation {
+                    id: dealPath
+                    target: card
+                    duration: 650
+                    easing.type: Easing.OutCubic
+
+                    path: Path {
+                        startX: card.startX
+                        startY: card.startY
+
+                        PathCubic {
+                            x: 0
+                            y: 0
+                            control1X: card.startX * 0.58
+                            control1Y: card.startY * 0.10 - flipRoot.cardHeight * 0.18
+                            control2X: -card.startX * 0.18
+                            control2Y: card.startY * 0.44
+                        }
+                    }
+                }
             }
         }
     }

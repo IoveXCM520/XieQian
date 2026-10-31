@@ -1,20 +1,27 @@
-<RCC>
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <!--
+        本文件位于 ui/ 目录下。
+        使用 prefix="/ui" + 相对路径 "qml/..."，
+        最终资源路径仍然保持为：
+        qrc:/ui/qml/Main.qml
+        qrc:/ui/qml/Theme.qml
+        等等，与 C++ 中的 engine.load(QUrl("qrc:/ui/qml/Main.qml")) 完全一致。
+    -->
     <qresource prefix="/ui">
         <file>qml/Main.qml</file>
-        <file>assets/app-icon-512.png</file>
-        <file>qml/components/WheelItem.qml</file>
-        <file>qml/components/FlipCardItem.qml</file>
-        <file>qml/components/BlindBoxItem.qml</file>
-        <file>qml/components/DrawSettingsDialog.qml</file>
-        <file>qml/components/ResultCard.qml</file>
+        <file>qml/Theme.qml</file>
+        <file>qml/qmldir</file>
+
         <file>qml/pages/HomePage.qml</file>
         <file>qml/pages/RosterPage.qml</file>
         <file>qml/pages/HistoryPage.qml</file>
         <file>qml/pages/ToolsPage.qml</file>
         <file>qml/pages/SettingsPage.qml</file>
-        <file>qml/pages/AboutPage.qml</file>
-        <file>audio/click.wav</file>
-        <file>audio/spin.wav</file>
-        <file>audio/win.wav</file>
+
+        <file>qml/components/WheelItem.qml</file>
+        <file>qml/components/FlipCardItem.qml</file>
+        <file>qml/components/BlindBoxItem.qml</file>
+        <file>qml/components/ResultCard.qml</file>
     </qresource>
 </RCC>
