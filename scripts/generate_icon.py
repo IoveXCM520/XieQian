@@ -9,7 +9,7 @@ import argparse
 import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
 ICON_PATH = ROOT / "assets" / "app.ico"
@@ -29,6 +29,10 @@ SCHEMES = {
     "b": ("B-diamond-sparkle", "极简星芒 (Diamond Sparkle)"),
     "c": ("C-overlapping-cards", "交叠的视界 (Overlapping Cards)"),
     "d": ("D-infinity-fold", "无限折线 (Infinity Fold)"),
+    "e": ("E-prism-pinwheel", "四象棱镜 (Prism Pinwheel)"),
+    "f": ("F-floating-tag", "悬浮签牌 (Floating Tag)"),
+    "g": ("G-crystal-fold", "折光晶体 (Crystal Fold)"),
+    "h": ("H-aurora-sparkle", "极光星芒 (Aurora Sparkle)"),
 }
 
 
@@ -211,11 +215,145 @@ def scheme_d(gradient):
     return result
 
 
+def scheme_e(gradient):
+    size = CANVAS
+    center = size / 2
+    result = canvas(size)
+
+    stroke = 0.110 * size
+    inner = 0.055 * size
+    outer = 0.380 * size
+    arm_center = center + (inner + outer) / 2
+    arms = (
+        (15.0, 1.00, 255),
+        (105.0, 1.14, 240),
+        (195.0, 0.88, 230),
+        (285.0, 1.08, 250),
+    )
+
+    for angle, brightness, alpha in arms:
+        mask = rounded_rect_mask(
+            size,
+            (arm_center, center),
+            outer - inner,
+            stroke,
+            stroke / 2,
+        )
+        mask = mask.rotate(angle, resample=Image.Resampling.BICUBIC, center=(center, center))
+        result.alpha_composite(filled(mask, gradient, alpha, brightness))
+
+    hub = Image.new("L", (size, size), 0)
+    hub_radius = 0.065 * size
+    ImageDraw.Draw(hub).ellipse(
+        [center - hub_radius, center - hub_radius, center + hub_radius, center + hub_radius],
+        fill=255,
+    )
+    result.alpha_composite(filled(hub, gradient, 255, 1.18))
+    return result
+
+
+def scheme_f(gradient):
+    size = CANVAS
+    center = size / 2
+    result = canvas(size)
+
+    card_width = 0.400 * size
+    card_height = 0.540 * size
+    radius = 0.065 * size
+    angle = -15.0
+    card_center = (center, center)
+
+    mask = rounded_rect_mask(size, card_center, card_width, card_height, radius)
+    hole = Image.new("L", (size, size), 0)
+    hole_radius = 0.042 * size
+    hole_center = (center, center - card_height / 2 + 0.100 * size)
+    ImageDraw.Draw(hole).ellipse(
+        [hole_center[0] - hole_radius, hole_center[1] - hole_radius,
+         hole_center[0] + hole_radius, hole_center[1] + hole_radius],
+        fill=255,
+    )
+    mask = ImageChops.subtract(mask, hole)
+    mask = mask.rotate(angle, resample=Image.Resampling.BICUBIC, center=card_center)
+
+    shadow = filled(mask, Image.new("RGB", (size, size), (8, 20, 40)), 55).filter(
+        ImageFilter.GaussianBlur(0.016 * size)
+    )
+    result.alpha_composite(shadow, dest=(0, round(0.010 * size)))
+    result.alpha_composite(filled(mask, gradient))
+
+    sparkle = astroid_mask(size, (0.735 * size, 0.735 * size), 0.065 * size, 0.085 * size)
+    result.alpha_composite(filled(sparkle, gradient, 235, 1.20))
+    return result
+
+
+def half_plane_mask(size, upper_left):
+    mask = Image.new("L", (size, size), 0)
+    if upper_left:
+        points = [(0, 0), (size - 1, 0), (0, size - 1)]
+    else:
+        points = [(size - 1, 0), (size - 1, size - 1), (0, size - 1)]
+    ImageDraw.Draw(mask).polygon(points, fill=255)
+    return mask
+
+
+def scheme_g(gradient):
+    size = CANVAS
+    center = size / 2
+    result = canvas(size)
+
+    side = 0.460 * size
+    diamond = rounded_rect_mask(size, (center, center), side, side, 0.075 * size)
+    diamond = diamond.rotate(45.0, resample=Image.Resampling.BICUBIC, center=(center, center))
+
+    cut = Image.new("L", (size, size), 0)
+    cut_draw = ImageDraw.Draw(cut)
+    cut_width = round(0.020 * size)
+    cut_draw.line(
+        [(0.12 * size, 0.88 * size), (0.88 * size, 0.12 * size)],
+        fill=255,
+        width=cut_width,
+    )
+
+    upper = ImageChops.multiply(diamond, half_plane_mask(size, True))
+    lower = ImageChops.multiply(diamond, half_plane_mask(size, False))
+    upper = ImageChops.subtract(upper, cut)
+    lower = ImageChops.subtract(lower, cut)
+
+    result.alpha_composite(filled(upper, gradient, 255, 1.15))
+    result.alpha_composite(filled(lower, gradient, 255, 0.82))
+
+    sparkle = astroid_mask(size, (0.780 * size, 0.220 * size), 0.070 * size, 0.090 * size)
+    result.alpha_composite(filled(sparkle, gradient, 235, 1.20))
+    return result
+
+
+def scheme_h(gradient):
+    size = CANVAS
+    center = size / 2
+    result = canvas(size)
+
+    halo = astroid_mask(size, (center, center), 0.240 * size, 0.300 * size)
+    halo = halo.filter(ImageFilter.GaussianBlur(0.045 * size))
+    result.alpha_composite(filled(halo, gradient, 70))
+
+    star = astroid_mask(size, (center, center), 0.205 * size, 0.260 * size)
+    result.alpha_composite(filled(star, gradient, 255, 1.08))
+
+    companion = astroid_mask(size, (0.740 * size, 0.300 * size), 0.070 * size, 0.090 * size)
+    result.alpha_composite(filled(companion, gradient, 220, 1.22))
+
+    return result
+
+
 SCHEME_BUILDERS = {
     "a": scheme_a,
     "b": scheme_b,
     "c": scheme_c,
     "d": scheme_d,
+    "e": scheme_e,
+    "f": scheme_f,
+    "g": scheme_g,
+    "h": scheme_h,
 }
 
 
