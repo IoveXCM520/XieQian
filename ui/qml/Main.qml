@@ -713,6 +713,8 @@ ApplicationWindow {
 
         onPaint: {
             var ctx = getContext("2d")
+            // Canvas 上下文在多次 paint 间复用，先重置变换，避免 scale 累积
+            ctx.setTransform(1, 0, 0, 1, 0, 0)
             ctx.clearRect(0, 0, width, height)
             ctx.scale(width / 22, height / 22)
             ctx.strokeStyle = strokeColor
