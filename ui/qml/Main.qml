@@ -492,17 +492,18 @@ ApplicationWindow {
                 property var particles: []
 
                 function seedParticles() {
+                    // Lehmer LCG：乘数小于 2^16，乘积不超 2^47，不会丢精度
                     var seed = 20260301
                     var list = []
                     for (var i = 0; i < 56; ++i) {
-                        seed = (seed * 1103515245 + 12345) % 2147483648
-                        var x = (seed % 10000) / 10000
-                        seed = (seed * 1103515245 + 12345) % 2147483648
-                        var y = (seed % 10000) / 10000
-                        seed = (seed * 1103515245 + 12345) % 2147483648
-                        var radius = 0.7 + ((seed % 10000) / 10000) * 2.0
-                        seed = (seed * 1103515245 + 12345) % 2147483648
-                        var alpha = 0.02 + ((seed % 10000) / 10000) * 0.055
+                        seed = (seed * 48271) % 2147483647
+                        var x = seed / 2147483647
+                        seed = (seed * 48271) % 2147483647
+                        var y = seed / 2147483647
+                        seed = (seed * 48271) % 2147483647
+                        var radius = 0.7 + (seed / 2147483647) * 2.0
+                        seed = (seed * 48271) % 2147483647
+                        var alpha = 0.02 + (seed / 2147483647) * 0.055
                         list.push({ "x": x, "y": y, "r": radius,
                                     "a": alpha, "green": (i % 4 === 0) })
                     }
