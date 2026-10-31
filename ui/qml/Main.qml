@@ -994,10 +994,11 @@ ApplicationWindow {
         }
 
         Rectangle {
-            width: 4
-            height: nav.selected ? 28 : 0
-            radius: 2
+            width: 3
+            height: nav.selected ? 26 : 0
+            radius: 1.5
             anchors.left: parent.left
+            anchors.leftMargin: 10
             anchors.verticalCenter: parent.verticalCenter
             opacity: nav.selected ? 1.0 : 0.0
 

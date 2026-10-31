@@ -220,7 +220,7 @@ Item {
                     anchors.left: parent.left
                     anchors.leftMargin: 32
                     anchors.right: parent.right
-                    anchors.rightMargin: 32
+                    anchors.rightMargin: 20
                     anchors.bottom: actionBar.top
                     anchors.bottomMargin: 16
                     contentWidth: width
@@ -236,7 +236,8 @@ Item {
 
                     Column {
                         id: formColumn
-                        width: formFlick.width
+                        // 给右侧滚动条让出 12px，避免右缘文字与删除按钮被遮住
+                        width: Math.max(0, formFlick.width - 12)
                         spacing: 0
 
                         Row {
