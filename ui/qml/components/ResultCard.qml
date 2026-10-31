@@ -391,7 +391,7 @@ Item {
 
             while (ctx.measureText(text).width > width - 12 && size > 12) {
                 size -= 2
-                ctx.font = "bold " + size + "px '" + family + "'"
+                ctx.font = "bold " + size + "px '" + Theme.fontFamily + "'"
             }
 
             var gradient = ctx.createLinearGradient(0, 0, width, 0)
