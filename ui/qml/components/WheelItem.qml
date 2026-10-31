@@ -43,7 +43,7 @@ Item {
         return Math.max(1, options.length)
     }
 
-    function startSpin() {
+    function startSpin(targetIndex) {
         if (spinAnimation.running)
             return
 
@@ -51,11 +51,15 @@ Item {
         // 也保证停止后文字保持设计时的放射朝向。
         var count = effectiveCount()
         var stepDegrees = 360 / count
-        var target = Math.floor(Math.random() * count)
+        var sector = targetIndex
+        if (sector === undefined || sector < 0 || sector >= count)
+            sector = Math.floor(Math.random() * count)
+
+        var alignment = ((count - sector) % count) * stepDegrees
 
         spinActive = true
         spinAnimation.from = angle
-        spinAnimation.to = angle + 1440 + target * stepDegrees
+        spinAnimation.to = angle + 1440 + alignment
         spinAnimation.start()
     }
 
@@ -125,20 +129,20 @@ Item {
 
                 // 高饱和、冷暖交替的现代色盘
                 var palette = [
-                    "#FF4D6D",
-                    "#FF8A00",
-                    "#F4B400",
-                    "#37D67A",
-                    "#00C2A8",
-                    "#2F80FF",
-                    "#7B61FF",
-                    "#E84DFF",
-                    "#FF5E9C",
-                    "#00B8D9"
+                    "#1E88FF",
+                    "#00C853",
+                    "#FFD600",
+                    "#FF6D00",
+                    "#00B0FF",
+                    "#00E676",
+                    "#FFAB00",
+                    "#FF3D00",
+                    "#2979FF",
+                    "#00BFA5"
                 ]
 
                 // 1. 实心扇形
-                var separator = Math.max(2, radius * 0.012)
+                var separator = 2
 
                 for (var i = 0; i < count; ++i) {
                     var a0 = start + i * step
@@ -311,18 +315,12 @@ Item {
         anchors.centerIn: parent
         z: 5
 
-        Rectangle {
-            anchors.fill: parent
-            radius: width / 2
-            color: "#FFFFFF"
-            border.width: 1
-            border.color: Theme.withAlpha(Theme.textPrimary, 0.08)
-        }
-
         Canvas {
-            id: hubInnerShadow
+            id: hubSurface
 
+            // 画布略大于中心轴，避免立体阴影被自身边界裁掉
             anchors.fill: parent
+            anchors.margins: -14
 
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
@@ -330,30 +328,68 @@ Item {
 
             onPaint: {
                 var ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+
                 var cx = width / 2
                 var cy = height / 2
-                var radius = Math.min(width, height) / 2 - 1
+                var radius = wheelRoot.hubSize / 2 - 5
                 if (radius <= 0)
                     return
 
-                ctx.clearRect(0, 0, width, height)
-                var inner = ctx.createRadialGradient(cx, cy, radius * 0.56,
-                                                     cx, cy, radius)
-                inner.addColorStop(0.0, "rgba(15,23,42,0)")
-                inner.addColorStop(0.76, "rgba(15,23,42,0.02)")
-                inner.addColorStop(1.0, "rgba(15,23,42,0.13)")
+                var pi2 = Math.PI * 2
+
+                // 立体投影
+                ctx.save()
+                ctx.beginPath()
+                ctx.arc(cx, cy + 1.5, radius, 0, pi2)
+                ctx.fillStyle = "#FFFFFF"
+                ctx.shadowColor = "rgba(15,23,42,0.38)"
+                ctx.shadowBlur = 13
+                ctx.shadowOffsetX = 0
+                ctx.shadowOffsetY = 6
+                ctx.fill()
+                ctx.restore()
+
+                // 盘面渐变
+                var body = ctx.createLinearGradient(cx, cy - radius,
+                                                    cx, cy + radius)
+                body.addColorStop(0.0, "#FFFFFF")
+                body.addColorStop(0.55, "#FBFCFE")
+                body.addColorStop(1.0, "#E9EEF6")
 
                 ctx.beginPath()
-                ctx.arc(cx, cy, radius, 0, Math.PI * 2)
-                ctx.fillStyle = inner
+                ctx.arc(cx, cy, radius, 0, pi2)
+                ctx.fillStyle = body
                 ctx.fill()
+
+                // 顶部高光
+                ctx.beginPath()
+                ctx.arc(cx, cy, radius - 2,
+                        Math.PI * 1.08, Math.PI * 1.92)
+                ctx.lineWidth = Math.max(2, radius * 0.09)
+                ctx.strokeStyle = "rgba(255,255,255,0.95)"
+                ctx.stroke()
+
+                // 底部内阴影
+                ctx.beginPath()
+                ctx.arc(cx, cy, radius - 2.5,
+                        Math.PI * 0.12, Math.PI * 0.88)
+                ctx.lineWidth = Math.max(2, radius * 0.08)
+                ctx.strokeStyle = "rgba(15,23,42,0.12)"
+                ctx.stroke()
+
+                ctx.beginPath()
+                ctx.arc(cx, cy, radius, 0, pi2)
+                ctx.lineWidth = 1
+                ctx.strokeStyle = "rgba(15,23,42,0.12)"
+                ctx.stroke()
             }
         }
 
         Text {
             anchors.centerIn: parent
             text: "签"
-            color: "#8C96A8"
+            color: "#3D4654"
             font.family: Theme.fontFamily
             font.pixelSize: Math.max(22, Math.round(hub.width * 0.30))
             font.weight: Font.Bold

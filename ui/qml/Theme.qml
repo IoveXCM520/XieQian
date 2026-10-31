@@ -33,21 +33,21 @@ QtObject {
     // ─────────────────────────────────────────────────────────────
     // 中性色
     // ─────────────────────────────────────────────────────────────
-    readonly property color background: "#F2F3F5"
+    readonly property color background: "#E6E8EB"
     readonly property color surface: "#FFFFFF"
-    readonly property color surfaceAlt: "#F7F8FA"
-    readonly property color surfaceMuted: "#F7F8FA"
-    readonly property color surfaceHover: "#F2F3F5"
-    readonly property color surfacePressed: "#ECEEF1"
+    readonly property color surfaceAlt: "#F5F6F8"
+    readonly property color surfaceMuted: "#F5F6F8"
+    readonly property color surfaceHover: "#EEF0F3"
+    readonly property color surfacePressed: "#E5E8EC"
 
-    readonly property color textPrimary: "#1F2329"
-    readonly property color textSecondary: "#8F959E"
-    readonly property color textTertiary: "#B7BCC4"
+    readonly property color textPrimary: "#000000"
+    readonly property color textSecondary: "#6C727A"
+    readonly property color textTertiary: "#8B929B"
     readonly property color textInverse: "#FFFFFF"
 
-    readonly property color divider: "#E5E6EB"
-    readonly property color border: "#E5E6EB"
-    readonly property color borderStrong: "#D8DBE0"
+    readonly property color divider: "#D6DAE0"
+    readonly property color border: "#D2D7DE"
+    readonly property color borderStrong: "#BFC5CE"
 
     readonly property color success: "#2ED4A5"
     readonly property color warning: "#FFB020"
@@ -64,20 +64,20 @@ QtObject {
     readonly property color transparent: "#00000000"
     readonly property color overlay: "#66000000"
     readonly property color scrim: "#33000000"
-    readonly property color switchOff: "#E5E6EB"
+    readonly property color switchOff: "#D6DAE0"
 
-    // 大转盘辅助色
-    readonly property color wheelSectorA: "#E3F2FD"
-    readonly property color wheelSectorB: "#E8F5E9"
-    readonly property color wheelSectorC: "#FFF8E1"
-    readonly property color wheelSectorD: "#F3E5F5"
-    readonly property color wheelText: "#44505F"
+    // 大转盘辅助色（高饱和）
+    readonly property color wheelSectorA: "#1E88FF"
+    readonly property color wheelSectorB: "#00C853"
+    readonly property color wheelSectorC: "#FFD600"
+    readonly property color wheelSectorD: "#FF6D00"
+    readonly property color wheelText: "#FFFFFF"
 
     // ─────────────────────────────────────────────────────────────
     // 阴影
     // ─────────────────────────────────────────────────────────────
-    readonly property color shadowColor: "#0A000000"
-    readonly property color shadowColorStrong: "#1A000000"
+    readonly property color shadowColor: "#1F000000"
+    readonly property color shadowColorStrong: "#33000000"
     readonly property int shadowRadius: 12
     readonly property int shadowSamples: 17
     readonly property int shadowOffsetY: 4
@@ -116,8 +116,8 @@ QtObject {
     // ─────────────────────────────────────────────────────────────
     // 布局
     // ─────────────────────────────────────────────────────────────
-    readonly property int titleBarHeight: 48
-    readonly property int sidebarWidth: 72
+    readonly property int titleBarHeight: 60
+    readonly property int sidebarWidth: 96
     readonly property int pagePadding: 32
 
     readonly property int space1: 4

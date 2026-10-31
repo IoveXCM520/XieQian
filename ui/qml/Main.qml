@@ -5,6 +5,7 @@ import QtQuick.Layouts
 
 import "."
 import "pages"
+import "components"
 
 ApplicationWindow {
     id: window
@@ -36,6 +37,16 @@ ApplicationWindow {
 
     property int currentPage: 0
     property int pendingPage: 0
+    property bool resultOpen: false
+
+    function showResult(names) {
+        resultCard.open(names)
+    }
+
+    function closeResult() {
+        if (resultCard.opened)
+            resultCard.close()
+    }
 
     function navigate(page) {
         var target = Math.max(0, Math.min(5, page))
@@ -131,28 +142,15 @@ ApplicationWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 10
 
-                Rectangle {
-                    width: 30
-                    height: 30
-                    radius: 9
-                    gradient: Theme.primaryGradient
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: parent.radius
-                        color: "transparent"
-                        border.width: 1
-                        border.color: Theme.withAlpha(Theme.white, 0.20)
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "签"
-                        color: Theme.white
-                        font.family: Theme.fontFamily
-                        font.pixelSize: 16
-                        font.weight: Font.Bold
-                    }
+                Image {
+                    width: 32
+                    height: 32
+                    source: "qrc:/ui/assets/app-icon-512.png"
+                    sourceSize.width: 96
+                    sourceSize.height: 96
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    mipmap: true
                 }
 
                 Column {
@@ -213,18 +211,20 @@ ApplicationWindow {
             color: Theme.surface
             z: 10
 
-            Column {
+            NavItem {
                 anchors.top: parent.top
-                anchors.topMargin: 14
-                width: parent.width
-                spacing: 4
+                anchors.topMargin: 16
+                anchors.horizontalCenter: parent.horizontalCenter
+                iconKind: 6
+                label: "主页"
+                selected: window.currentPage === 0
+                onTriggered: window.navigate(0)
+            }
 
-                NavItem {
-                    iconKind: 0
-                    label: "抽奖"
-                    selected: window.currentPage === 0
-                    onTriggered: window.navigate(0)
-                }
+            Column {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 4
 
                 NavItem {
                     iconKind: 5
@@ -253,13 +253,16 @@ ApplicationWindow {
                     selected: window.currentPage === 4
                     onTriggered: window.navigate(4)
                 }
+            }
 
-                NavItem {
-                    iconKind: 4
-                    label: "设置"
-                    selected: window.currentPage === 5
-                    onTriggered: window.navigate(5)
-                }
+            NavItem {
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 16
+                anchors.horizontalCenter: parent.horizontalCenter
+                iconKind: 4
+                label: "设置"
+                selected: window.currentPage === 5
+                onTriggered: window.navigate(5)
             }
         }
 
@@ -297,8 +300,8 @@ ApplicationWindow {
                         id: addPage
 
                         onWheelCreated: function(name, options) {
-                            homePage.wheelName = name
-                            homePage.wheelOptions = options
+                            backendBridge.saveCustomWheel(name, options)
+                            homePage.activateWheel(name)
                         }
                     }
 
@@ -437,6 +440,24 @@ ApplicationWindow {
     }
 
     // ═════════════════════════════════════════════════════════════
+    // 中奖贺卡：挂载在窗口顶层，遮罩覆盖侧边栏与标题栏
+    // ═════════════════════════════════════════════════════════════
+    ResultCard {
+        id: resultCard
+        anchors.fill: parent
+        z: 95000
+
+        onOpenedChanged: window.resultOpen = opened
+
+        onCloseRequested: homePage.lastWinners = []
+
+        onContinueRequested: {
+            homePage.lastWinners = []
+            homePage.startDraw()
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════
     // 启动页：全屏浅色品牌页，2.5 秒后淡出
     // ═════════════════════════════════════════════════════════════
     Item {
@@ -481,33 +502,33 @@ ApplicationWindow {
 
             Column {
                 anchors.centerIn: parent
-                width: 320
+                width: 400
                 spacing: 0
 
                 Item {
                     width: parent.width
-                    height: 132
+                    height: 160
 
                     Item {
                         id: logoBlock
-                        width: 132
-                        height: 132
+                        width: 160
+                        height: 160
                         anchors.centerIn: parent
                         scale: 0.92
                         opacity: 0.0
 
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 168
-                            height: 168
-                            radius: 52
+                            width: 200
+                            height: 200
+                            radius: 64
                             color: Theme.withAlpha(Theme.primary, 0.08)
                         }
 
                         Rectangle {
                             id: logoPlate
                             anchors.fill: parent
-                            radius: 32
+                            radius: 38
                             gradient: Theme.primaryGradientVertical
                             border.width: 1
                             border.color: Theme.withAlpha(Theme.white, 0.35)
@@ -518,7 +539,7 @@ ApplicationWindow {
                                 text: "签"
                                 color: Theme.white
                                 font.family: Theme.fontFamily
-                                font.pixelSize: 58
+                                font.pixelSize: 68
                                 font.weight: Font.Bold
                                 visible: logoImage.status !== Image.Ready
                             }
@@ -528,8 +549,8 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 source: "qrc:/ui/assets/app-icon-512.png"
                                 fillMode: Image.PreserveAspectFit
-                                sourceSize.width: 264
-                                sourceSize.height: 264
+                                sourceSize.width: 320
+                                sourceSize.height: 320
                                 smooth: true
                                 mipmap: true
                                 visible: status === Image.Ready
@@ -538,7 +559,7 @@ ApplicationWindow {
                     }
                 }
 
-                Item { width: 1; height: 24 }
+                Item { width: 1; height: 20 }
 
                 Text {
                     width: parent.width
@@ -559,11 +580,11 @@ ApplicationWindow {
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 11
                     font.letterSpacing: 5
                 }
 
-                Item { width: 1; height: 12 }
+                Item { width: 1; height: 14 }
 
                 Text {
                     width: parent.width
@@ -571,22 +592,22 @@ ApplicationWindow {
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontCaption
+                    font.pixelSize: 16
                 }
 
-                Item { width: 1; height: 32 }
+                Item { width: 1; height: 34 }
 
                 Item {
                     width: parent.width
-                    height: 4
+                    height: 6
 
                     Rectangle {
                         id: progressTrack
-                        width: 168
-                        height: 4
-                        radius: 2
+                        width: 252
+                        height: 6
+                        radius: 3
                         anchors.centerIn: parent
-                        color: "#EBEEF3"
+                        color: "#DDE1E6"
 
                         Rectangle {
                             id: progressFill
@@ -598,7 +619,7 @@ ApplicationWindow {
                     }
                 }
 
-                Item { width: 1; height: 12 }
+                Item { width: 1; height: 14 }
 
                 Text {
                     width: parent.width
@@ -606,7 +627,7 @@ ApplicationWindow {
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textTertiary
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 11
                     font.letterSpacing: 1
                 }
             }
@@ -679,8 +700,8 @@ ApplicationWindow {
     component NavIcon: Canvas {
         id: icon
 
-        width: 22
-        height: 22
+        width: 26
+        height: 26
 
         property int kind: 0
         property color strokeColor: Theme.textSecondary
@@ -693,14 +714,15 @@ ApplicationWindow {
         onPaint: {
             var ctx = getContext("2d")
             ctx.clearRect(0, 0, width, height)
+            ctx.scale(width / 22, height / 22)
             ctx.strokeStyle = strokeColor
             ctx.fillStyle = strokeColor
             ctx.lineWidth = strokeWidth
             ctx.lineCap = "round"
             ctx.lineJoin = "round"
 
-            var cx = width / 2
-            var cy = height / 2
+            var cx = 11
+            var cy = 11
             var i
             var angle
 
@@ -791,14 +813,28 @@ ApplicationWindow {
                 ctx.beginPath()
                 ctx.arc(cx, cy, 2.6, 0, Math.PI * 2)
                 ctx.stroke()
-            } else {
-                // 新增：极简 “+”，用于「添加」导航项
+            } else if (kind === 5) {
+                // 极简 “+”，用于「添加」导航项
                 ctx.lineWidth = 1.9
                 ctx.beginPath()
                 ctx.moveTo(cx, 4.6)
                 ctx.lineTo(cx, 17.4)
                 ctx.moveTo(4.6, cy)
                 ctx.lineTo(17.4, cy)
+                ctx.stroke()
+            } else if (kind === 6) {
+                // 房子，用于「主页」导航项
+                ctx.beginPath()
+                ctx.moveTo(3.6, 10.8)
+                ctx.lineTo(11, 4.2)
+                ctx.lineTo(18.4, 10.8)
+                ctx.stroke()
+
+                ctx.beginPath()
+                ctx.moveTo(5.9, 9.8)
+                ctx.lineTo(5.9, 17.6)
+                ctx.lineTo(16.1, 17.6)
+                ctx.lineTo(16.1, 9.8)
                 ctx.stroke()
             }
         }
@@ -807,8 +843,8 @@ ApplicationWindow {
     component NavItem: Item {
         id: nav
 
-        width: 72
-        height: 64
+        width: Theme.sidebarWidth
+        height: 68
 
         property bool selected: false
         property int iconKind: 0
@@ -817,9 +853,9 @@ ApplicationWindow {
 
         Rectangle {
             id: navHalo
-            width: 52
-            height: 54
-            radius: 14
+            width: 58
+            height: 58
+            radius: 16
             anchors.centerIn: parent
             color: nav.selected
                    ? Theme.primarySoft
@@ -846,16 +882,16 @@ ApplicationWindow {
         Column {
             width: parent.width
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 3
+            spacing: 4
 
             Item {
                 width: parent.width
-                height: 22
+                height: 26
 
                 NavIcon {
                     anchors.centerIn: parent
-                    width: 22
-                    height: 22
+                    width: 26
+                    height: 26
                     kind: nav.iconKind
                     strokeColor: nav.selected
                                  ? Theme.primary
@@ -871,7 +907,7 @@ ApplicationWindow {
                 horizontalAlignment: Text.AlignHCenter
                 color: nav.selected ? Theme.primary : Theme.textSecondary
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontMicro
+                font.pixelSize: 13
                 font.weight: nav.selected ? Font.DemiBold : Font.Normal
 
                 Behavior on color {

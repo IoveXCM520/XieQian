@@ -16,18 +16,67 @@ import "../components"
 Item {
     id: page
 
-    // 自定义转盘由 Main.qml 在 AddPage 保存后注入；这里给出默认示例
-    property string wheelName: "默认转盘"
-    property var wheelOptions: ["上上签", "好运", "如愿", "惊喜", "欢喜", "顺遂"]
+    property int selectedWheel: 0
+    property var rosterOptions: []
+    property int pendingCustomIndex: -1
+
+    // 第 0 项固定为名单转盘，其余为持久化的自定义转盘
+    readonly property var wheelChoices: {
+        var list = [{ "name": "默认转盘", "options": [], "custom": false }]
+        var wheels = backendBridge.customWheels
+        for (var i = 0; i < wheels.length; ++i) {
+            list.push({ "name": wheels[i].name,
+                        "options": wheels[i].options,
+                        "custom": true })
+        }
+        return list
+    }
+
+    readonly property bool customWheel: selectedWheel > 0
+                                         && selectedWheel < wheelChoices.length
+    readonly property string wheelName: customWheel
+                                        ? wheelChoices[selectedWheel].name
+                                        : "默认转盘"
+    readonly property var wheelOptions: customWheel
+                                        ? wheelChoices[selectedWheel].options
+                                        : rosterOptions
 
     property bool busy: false
     property var lastWinners: []
     property var pendingWinners: []
 
-    readonly property bool isEmpty: backendBridge.rosterCount === 0
-    readonly property string wheelHint: "转动签盘，把选择交给一点点运气"
+    readonly property bool isEmpty: customWheel ? wheelOptions.length === 0
+                                                : rosterOptions.length === 0
+    readonly property string wheelHint: customWheel
+                                        ? "转动专属签盘，把选择交给一点点运气"
+                                        : "转动签盘，把选择交给一点点运气"
 
     signal importRosterRequested()
+
+    function refreshRosterOptions() {
+        var list = []
+        var participants = backendBridge.getParticipantsWithStatus()
+        for (var i = 0; i < participants.length; ++i) {
+            if (participants[i].enabled)
+                list.push(String(participants[i].name))
+        }
+        rosterOptions = list
+    }
+
+    function selectWheel(index) {
+        if (index < 0 || index >= wheelChoices.length)
+            return
+        selectedWheel = index
+    }
+
+    function activateWheel(name) {
+        for (var i = 1; i < wheelChoices.length; ++i) {
+            if (wheelChoices[i].name === name) {
+                selectedWheel = i
+                return
+            }
+        }
+    }
 
     function startDraw() {
         if (busy || isEmpty)
@@ -36,14 +85,31 @@ Item {
         busy = true
         lastWinners = []
         pendingWinners = []
+        pendingCustomIndex = -1
 
-        wheelItem.startSpin()
+        if (customWheel) {
+            if (wheelOptions.length > 0)
+                pendingCustomIndex = Math.floor(Math.random() * wheelOptions.length)
+            wheelItem.startSpin(pendingCustomIndex)
+        } else {
+            wheelItem.startSpin()
+        }
+
         safetyTimer.restart()
     }
 
     function drawAndReveal() {
         if (!busy)
             return
+
+        if (customWheel) {
+            var list = []
+            if (pendingCustomIndex >= 0 && pendingCustomIndex < wheelOptions.length)
+                list.push(String(wheelOptions[pendingCustomIndex]))
+            pendingCustomIndex = -1
+            handleWinners(list)
+            return
+        }
 
         if (backendBridge.drawCount > 1)
             backendBridge.drawMultipleWinners()
@@ -87,10 +153,12 @@ Item {
         busy = false
         lastWinners = pendingWinners
         pendingWinners = []
+        pendingCustomIndex = -1
         safetyTimer.stop()
 
-        if (lastWinners.length > 0)
-            resultCard.open(lastWinners)
+        if (lastWinners.length > 0 && Window.window
+                && typeof Window.window.showResult === "function")
+            Window.window.showResult(lastWinners)
     }
 
     function goToRoster() {
@@ -106,10 +174,12 @@ Item {
             pendingWinners = []
             if (safetyTimer)
                 safetyTimer.stop()
-            if (resultCard && resultCard.opened)
-                resultCard.close()
+            if (Window.window && typeof Window.window.closeResult === "function")
+                Window.window.closeResult()
         }
     }
+
+    Component.onCompleted: refreshRosterOptions()
 
     // ─────────────────────────────────────────────────────────────
     // 页面布局
@@ -180,7 +250,7 @@ Item {
                         text: page.busy
                               ? "签运流转中，请稍候…"
                               : (page.isEmpty
-                                 ? "导入名单后即可开始"
+                                 ? (page.customWheel ? "添加选项后即可开始" : "导入名单后即可开始")
                                  : "快速抽取")
                         color: Theme.textSecondary
                         font.family: Theme.fontFamily
@@ -196,7 +266,7 @@ Item {
 
                     Text {
                         id: importLink
-                        visible: page.isEmpty
+                        visible: page.isEmpty && !page.customWheel
                         Layout.alignment: Qt.AlignVCenter
                         text: "去导入"
                         color: Theme.primary
@@ -290,10 +360,11 @@ Item {
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
-                height: 92
+                height: page.wheelChoices.length > 1 ? 128 : 100
 
                 Column {
                     anchors.centerIn: parent
+                    width: Math.min(stageCard.width - 280, 640)
                     spacing: 6
 
                     Text {
@@ -305,6 +376,57 @@ Item {
                         font.pixelSize: Theme.fontH0
                         font.weight: Font.Bold
                         elide: Text.ElideRight
+                    }
+
+                    Flickable {
+                        visible: page.wheelChoices.length > 1
+                        width: parent.width
+                        height: 26
+                        contentWidth: chipRow.width
+                        contentHeight: 26
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+
+                        Row {
+                            id: chipRow
+                            spacing: 6
+
+                            Repeater {
+                                model: page.wheelChoices
+
+                                delegate: Rectangle {
+                                    width: wheelChipText.implicitWidth + 22
+                                    height: 24
+                                    radius: 12
+                                    color: index === page.selectedWheel
+                                           ? Theme.primary
+                                           : Theme.surfaceAlt
+                                    border.width: 1
+                                    border.color: index === page.selectedWheel
+                                                  ? Theme.primary
+                                                  : Theme.border
+
+                                    Text {
+                                        id: wheelChipText
+                                        anchors.centerIn: parent
+                                        text: modelData.name
+                                        color: index === page.selectedWheel
+                                               ? Theme.white
+                                               : Theme.textSecondary
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: 11
+                                        font.weight: Font.DemiBold
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: page.selectWheel(index)
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     Text {
@@ -346,7 +468,9 @@ Item {
                             Layout.alignment: Qt.AlignVCenter
                             text: page.busy
                                   ? "抽取中"
-                                  : "名单 " + backendBridge.rosterCount + " 人"
+                                  : (page.customWheel
+                                     ? "选项 " + page.wheelOptions.length + " 个"
+                                     : "名单 " + page.rosterOptions.length + " 人")
                             color: Theme.textSecondary
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontMicro
@@ -376,18 +500,6 @@ Item {
         }
     }
 
-    ResultCard {
-        id: resultCard
-        anchors.fill: parent
-
-        onCloseRequested: page.lastWinners = []
-
-        onContinueRequested: {
-            page.lastWinners = []
-            page.startDraw()
-        }
-    }
-
     Timer {
         id: safetyTimer
         interval: 7000
@@ -402,15 +514,18 @@ Item {
         sequence: "Space"
         context: Qt.WindowShortcut
         enabled: page.visible && !page.busy && !page.isEmpty
-                 && (!resultCard || !resultCard.opened)
+                 && !(Window.window && Window.window.resultOpen)
         onActivated: page.startDraw()
     }
 
     Shortcut {
         sequence: "Esc"
         context: Qt.WindowShortcut
-        enabled: page.visible && resultCard && resultCard.opened
-        onActivated: resultCard.close()
+        enabled: page.visible && Window.window && Window.window.resultOpen
+        onActivated: {
+            if (Window.window)
+                Window.window.closeResult()
+        }
     }
 
     Connections {
@@ -422,6 +537,15 @@ Item {
 
         function onWinnersDrawn(names) {
             page.handleWinners(names)
+        }
+
+        function onRosterUpdated() {
+            page.refreshRosterOptions()
+        }
+
+        function onCustomWheelsChanged() {
+            if (page.selectedWheel >= page.wheelChoices.length)
+                page.selectedWheel = 0
         }
     }
 

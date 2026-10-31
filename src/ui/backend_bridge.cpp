@@ -373,6 +373,56 @@ void BackendBridge::updateParticipantWeight(const QString &id, double weight)
     }
 }
 
+void BackendBridge::saveCustomWheel(const QString &name, const QVariantList &options)
+{
+    const QString wheelName = name.trimmed();
+    if (wheelName.isEmpty()) {
+        return;
+    }
+
+    QStringList wheelOptions;
+    for (const QVariant &value : options) {
+        const QString option = value.toString().trimmed();
+        if (!option.isEmpty() && !wheelOptions.contains(option)) {
+            wheelOptions.append(option);
+        }
+    }
+
+    if (wheelOptions.size() < 2) {
+        return;
+    }
+
+    const auto existing = std::find_if(customWheels_.begin(), customWheels_.end(),
+                                       [&wheelName](const CustomWheel &wheel) {
+                                           return wheel.name == wheelName;
+                                       });
+    if (existing != customWheels_.end()) {
+        existing->options = wheelOptions;
+    } else {
+        customWheels_.push_back(CustomWheel{wheelName, wheelOptions});
+    }
+
+    saveState();
+    emit customWheelsChanged();
+}
+
+QVariantList BackendBridge::customWheels() const
+{
+    QVariantList wheels;
+    for (const CustomWheel &wheel : customWheels_) {
+        QVariantList options;
+        for (const QString &option : wheel.options) {
+            options.append(option);
+        }
+
+        QVariantMap entry;
+        entry.insert(QStringLiteral("name"), wheel.name);
+        entry.insert(QStringLiteral("options"), options);
+        wheels.append(entry);
+    }
+    return wheels;
+}
+
 void BackendBridge::resetDrawnHistory()
 {
     drawEngine_->clearDrawnHistory();
@@ -395,11 +445,13 @@ void BackendBridge::clearAllData()
 {
     roster_->clear();
     history_.clear();
+    customWheels_.clear();
     drawEngine_->clearDrawnHistory();
 
     saveState();
     emit rosterUpdated();
     emit historyUpdated();
+    emit customWheelsChanged();
 }
 
 int BackendBridge::currentDrawMode() const
@@ -528,9 +580,18 @@ QJsonObject BackendBridge::stateToJson() const
         history.append(entry);
     }
 
+    QJsonArray customWheels;
+    for (const CustomWheel &wheel : customWheels_) {
+        QJsonObject entry;
+        entry.insert(QStringLiteral("name"), wheel.name);
+        entry.insert(QStringLiteral("options"), QJsonArray::fromStringList(wheel.options));
+        customWheels.append(entry);
+    }
+
     QJsonObject root;
     root.insert(QStringLiteral("roster"), roster);
     root.insert(QStringLiteral("history"), history);
+    root.insert(QStringLiteral("customWheels"), customWheels);
     root.insert(QStringLiteral("soundEnabled"), soundEnabled_);
     root.insert(QStringLiteral("motionEnabled"), motionEnabled_);
     return root;
@@ -563,6 +624,27 @@ void BackendBridge::applyData(const QJsonObject &root)
         }
 
         history_.push_back(HistoryEntry{name, entry.value(QStringLiteral("time")).toString()});
+    }
+
+    customWheels_.clear();
+    for (const QJsonValue &value : root.value(QStringLiteral("customWheels")).toArray()) {
+        const QJsonObject entry = value.toObject();
+        const QString name = entry.value(QStringLiteral("name")).toString().trimmed();
+        if (name.isEmpty()) {
+            continue;
+        }
+
+        QStringList options;
+        for (const QJsonValue &option : entry.value(QStringLiteral("options")).toArray()) {
+            const QString text = option.toString().trimmed();
+            if (!text.isEmpty() && !options.contains(text)) {
+                options.append(text);
+            }
+        }
+
+        if (options.size() >= 2) {
+            customWheels_.push_back(CustomWheel{name, options});
+        }
     }
 
     soundEnabled_ = root.value(QStringLiteral("soundEnabled")).toBool(true);
@@ -634,4 +716,5 @@ void BackendBridge::importData(const QString &filePath)
     if (motionEnabled_ != motionWasEnabled) {
         emit motionEnabledChanged();
     }
+    emit customWheelsChanged();
 }

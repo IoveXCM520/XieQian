@@ -38,7 +38,7 @@ Item {
 
         Text {
             Layout.alignment: Qt.AlignHCenter
-            text: "v1.0.3 (Build 2026)"
+            text: "v1.0.4 (Build 2026)"
             color: "#8A97A5"
             font.pixelSize: 14
             font.letterSpacing: 2

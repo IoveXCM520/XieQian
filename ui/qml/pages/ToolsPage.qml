@@ -674,7 +674,6 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: height / 2
-            color: Theme.transparent
             gradient: Gradient {
                 orientation: Gradient.Horizontal
                 GradientStop {

@@ -26,6 +26,7 @@ class BackendBridge : public QObject
     Q_PROPERTY(bool motionEnabled READ motionEnabled WRITE setMotionEnabled NOTIFY motionEnabledChanged)
     Q_PROPERTY(AiManager *aiManager READ aiManager CONSTANT)
     Q_PROPERTY(bool rosterLoading READ rosterLoading NOTIFY rosterLoadingChanged)
+    Q_PROPERTY(QVariantList customWheels READ customWheels NOTIFY customWheelsChanged)
 
 public:
     enum class DrawMode { Wheel = 0, FlipCard = 1, BlindBox = 2 };
@@ -45,6 +46,7 @@ public:
     Q_INVOKABLE QVariantList getParticipantsWithStatus();
     Q_INVOKABLE void toggleParticipantStatus(int index);
     Q_INVOKABLE void updateParticipantWeight(const QString &id, double weight);
+    Q_INVOKABLE void saveCustomWheel(const QString &name, const QVariantList &options);
     Q_INVOKABLE void resetDrawnHistory();
     Q_INVOKABLE QVariantList getHistory();
     Q_INVOKABLE void clearAllData();
@@ -71,6 +73,8 @@ public:
 
     bool rosterLoading() const;
 
+    QVariantList customWheels() const;
+
 signals:
     void rosterUpdated();
     void historyUpdated();
@@ -81,11 +85,17 @@ signals:
     void soundEnabledChanged();
     void motionEnabledChanged();
     void rosterLoadingChanged();
+    void customWheelsChanged();
 
 private:
     struct HistoryEntry {
         QString name;
         QString time;
+    };
+
+    struct CustomWheel {
+        QString name;
+        QStringList options;
     };
 
     void recordDraw(const QString &name);
@@ -101,6 +111,7 @@ private:
     std::unique_ptr<xieqian::core::DrawEngine> drawEngine_;
     std::unique_ptr<AiManager> aiManager_;
     std::vector<HistoryEntry> history_;
+    std::vector<CustomWheel> customWheels_;
     DrawMode currentDrawMode_ = DrawMode::Wheel;
     int drawCount_ = 1;
     xieqian::core::DrawStrategy drawStrategy_ = xieqian::core::DrawStrategy::Random;

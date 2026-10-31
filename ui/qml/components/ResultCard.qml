@@ -15,7 +15,6 @@ Item {
     id: resultCard
 
     anchors.fill: parent
-    z: 1000
 
     property var winnerNames: []
     property bool opened: false
@@ -125,8 +124,10 @@ Item {
         width: resultCard.multi
                ? Math.min(780, resultCard.width - 80)
                : Math.min(540, resultCard.width - 80)
-        height: Math.min(resultCard.height - 32,
-                         resultCard.multi ? 420 + resultCard.rows * 56 : 500)
+        readonly property real contentHeight: 28 + titleText.implicitHeight + 18
+                                              + bodyColumn.implicitHeight
+                                              + 24 + 44 + 28
+        height: Math.min(resultCard.height - 48, Math.max(320, contentHeight))
         radius: Theme.radiusDialog
         color: Theme.surface
         scale: resultCard.opened ? 1.0 : 0.96
@@ -442,7 +443,6 @@ Item {
             id: buttonShadowSource
             anchors.fill: parent
             radius: height / 2
-            color: Theme.transparent
             gradient: Gradient {
                 orientation: Gradient.Horizontal
                 GradientStop {
@@ -469,7 +469,6 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: height / 2
-            color: Theme.transparent
             gradient: Gradient {
                 orientation: Gradient.Horizontal
                 GradientStop {

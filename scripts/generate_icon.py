@@ -1,8 +1,9 @@
 """Generate the final XieQian application icon (Aurora Sparkle).
 
 A large concave-sided four-point sparkle with a soft gradient halo, plus one
-smaller companion sparkle. Rendered at 2x and downsampled with Lanczos for
-clean antialiased edges at every icon size.
+smaller companion sparkle, sitting on a rounded light plate so the blue-green
+graphic stays visible on light desktops. Rendered at 2x and downsampled with
+Lanczos for clean antialiased edges at every icon size.
 """
 
 import math
@@ -21,6 +22,10 @@ CANVAS = MASTER_SIZE * SUPERSAMPLE
 
 BLUE = (0x3B, 0x8B, 0xF6)
 GREEN = (0x2E, 0xD4, 0xA5)
+PLATE_TOP = (0xF7, 0xF8, 0xFA)
+PLATE_BOTTOM = (0xE7, 0xEB, 0xF0)
+PLATE_BORDER = (0xD6, 0xDB, 0xE1)
+PLATE_RADIUS_RATIO = 0.22
 
 
 def lerp(start, end, amount):
@@ -66,15 +71,44 @@ def filled(mask, gradient, alpha=255, brightness=1.0):
     return layer
 
 
+def plate_mask(size):
+    mask = Image.new("L", (size, size), 0)
+    radius = round(size * PLATE_RADIUS_RATIO)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, size - 1, size - 1], radius=radius, fill=255)
+    return mask
+
+
+def plate_image(size):
+    """Rounded light-gray plate with a subtle vertical gradient and border."""
+    gradient = Image.new("RGB", (size, size))
+    draw = ImageDraw.Draw(gradient)
+    for y in range(size):
+        color = lerp(PLATE_TOP, PLATE_BOTTOM, y / (size - 1))
+        draw.line([(0, y), (size - 1, y)], fill=color)
+
+    plate = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    plate.paste(gradient, (0, 0), plate_mask(size))
+
+    radius = round(size * PLATE_RADIUS_RATIO)
+    border = max(2, round(size * 0.004))
+    ImageDraw.Draw(plate).rounded_rectangle(
+        [border // 2, border // 2, size - 1 - border // 2, size - 1 - border // 2],
+        radius=radius,
+        outline=PLATE_BORDER + (255,),
+        width=border,
+    )
+    return plate
+
+
 def build_master():
     size = CANVAS
     center = size / 2
     gradient = gradient_image(size)
-    result = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    result = plate_image(size)
 
     halo = sparkle_mask(size, (center, center), 0.240 * size, 0.300 * size)
     halo = halo.filter(ImageFilter.GaussianBlur(0.045 * size))
-    result.alpha_composite(filled(halo, gradient, 70))
+    result.alpha_composite(filled(halo, gradient, 90))
 
     star = sparkle_mask(size, (center, center), 0.205 * size, 0.260 * size)
     result.alpha_composite(filled(star, gradient, 255, 1.08))

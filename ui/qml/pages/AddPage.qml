@@ -1050,7 +1050,7 @@ Item {
                     ctx.fillStyle = colors[i % colors.length]
                     ctx.fill()
                     ctx.strokeStyle = "#FFFFFF"
-                    ctx.lineWidth = 3
+                    ctx.lineWidth = 2
                     ctx.stroke()
 
                     if (labels.length === 0)
@@ -1066,11 +1066,17 @@ Item {
 
                     ctx.font = "600 12px '" + Theme.fontFamily + "'"
                     ctx.fillStyle = String(Theme.wheelText)
+                    ctx.shadowColor = "rgba(15,23,42,0.55)"
+                    ctx.shadowBlur = 3
+                    ctx.shadowOffsetY = 1.5
                     ctx.textAlign = "center"
                     ctx.textBaseline = "middle"
                     ctx.fillText(label, lx, ly, radius * 0.52)
                 }
 
+                ctx.shadowColor = "transparent"
+                ctx.shadowBlur = 0
+                ctx.shadowOffsetY = 0
                 ctx.strokeStyle = "rgba(255,255,255,0.92)"
                 ctx.lineWidth = 5
                 ctx.beginPath()

@@ -13,7 +13,7 @@ Rectangle {
     property Item target
     property real shadowBlur: 0.65
     property real shadowOffsetY: 5
-    property color shadowColor: Theme.withAlpha(Theme.textPrimary, 0.10)
+    property color shadowColor: Theme.shadowColor
 
     anchors.fill: target
     radius: target && target.radius !== undefined
