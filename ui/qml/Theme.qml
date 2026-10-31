@@ -66,16 +66,12 @@ QtObject {
     readonly property color scrim: "#33000000"
     readonly property color switchOff: "#E5E6EB"
 
-    // 转盘 / 翻牌 / 盲盒辅助色
+    // 大转盘辅助色
     readonly property color wheelSectorA: "#E3F2FD"
     readonly property color wheelSectorB: "#E8F5E9"
     readonly property color wheelSectorC: "#FFF8E1"
     readonly property color wheelSectorD: "#F3E5F5"
     readonly property color wheelText: "#44505F"
-
-    readonly property color cardBackA: "#FFFFFF"
-    readonly property color cardBackB: "#F4F8FF"
-    readonly property color cardBackC: "#EAF7F2"
 
     // ─────────────────────────────────────────────────────────────
     // 阴影
@@ -93,7 +89,7 @@ QtObject {
     // ─────────────────────────────────────────────────────────────
     readonly property int radiusWindow: 12
     readonly property int radiusCard: 16
-    readonly property int radiusListCard: 12
+    readonly property int radiusListCard: 16
     readonly property int radiusDialog: 24
     readonly property int radiusControl: 8
     readonly property int radiusSmall: 6

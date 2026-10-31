@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Effects
 
 import ".."
+import "../components"
 
 /*!
     全局设置页。
@@ -44,7 +45,7 @@ Item {
                     text: "让撷签更符合你的课堂习惯"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontCaption
+                    font.pixelSize: Theme.fontBody
                 }
             }
         }
@@ -91,6 +92,8 @@ Item {
                     border.width: 1
                     border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
 
+                    CardShadow {}
+
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 20
@@ -114,7 +117,7 @@ Item {
                                 text: "抽取与中签时播放提示音"
                                 color: Theme.textSecondary
                                 font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontCaption
+                                font.pixelSize: Theme.fontBody
                             }
                         }
 
@@ -136,6 +139,8 @@ Item {
                     border.width: 1
                     border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
 
+                    CardShadow {}
+
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 20
@@ -156,10 +161,10 @@ Item {
                             }
 
                             Text {
-                                text: "转盘、翻牌与盲盒的完整动画"
+                                text: "转盘旋转与揭晓的完整动画"
                                 color: Theme.textSecondary
                                 font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontCaption
+                                font.pixelSize: Theme.fontBody
                             }
                         }
 
@@ -192,6 +197,8 @@ Item {
                     border.width: 1
                     border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
 
+                    CardShadow {}
+
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 20
@@ -215,7 +222,7 @@ Item {
                                 text: "将名单、历史与设置导出为 JSON 文件"
                                 color: Theme.textSecondary
                                 font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontCaption
+                                font.pixelSize: Theme.fontBody
                             }
                         }
 
@@ -242,6 +249,8 @@ Item {
                     border.width: 1
                     border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
 
+                    CardShadow {}
+
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 20
@@ -265,7 +274,7 @@ Item {
                                 text: "从 JSON 备份恢复名单、历史与设置"
                                 color: Theme.textSecondary
                                 font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontCaption
+                                font.pixelSize: Theme.fontBody
                             }
                         }
 
@@ -301,9 +310,11 @@ Item {
                     width: parent.width
                     height: 86
                     radius: Theme.radiusListCard
-                    color: Theme.dangerSoft
+                    color: Theme.surface
                     border.width: 1
-                    border.color: Theme.withAlpha(Theme.danger, 0.16)
+                    border.color: Theme.withAlpha(Theme.danger, 0.18)
+
+                    CardShadow {}
 
                     RowLayout {
                         anchors.fill: parent
@@ -328,7 +339,7 @@ Item {
                                 text: "名单与中奖记录将被永久删除，不可撤销"
                                 color: Theme.withAlpha(Theme.danger, 0.72)
                                 font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontCaption
+                                font.pixelSize: Theme.fontBody
                             }
                         }
 
@@ -396,7 +407,7 @@ Item {
                 text: "恢复后将覆盖当前名单、历史与设置，请确认已选择正确的备份文件。"
                 color: Theme.textSecondary
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontCaption
+                font.pixelSize: Theme.fontBody
                 wrapMode: Text.WordWrap
                 lineHeight: 1.35
             }
@@ -477,7 +488,7 @@ Item {
                 text: "名单与中奖记录将被永久删除，此操作不可撤销。"
                 color: Theme.textSecondary
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontCaption
+                font.pixelSize: Theme.fontBody
                 wrapMode: Text.WordWrap
                 lineHeight: 1.35
             }
@@ -547,16 +558,8 @@ Item {
             height: 26
             radius: 13
             color: Theme.white
-
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowColor: Theme.shadowColorStrong
-                shadowBlur: 0.35
-                shadowVerticalOffset: 1
-                shadowHorizontalOffset: 0
-                autoPaddingEnabled: true
-            }
+            border.width: 1
+            border.color: Theme.withAlpha(Theme.textPrimary, 0.08)
 
             Behavior on x {
                 NumberAnimation {

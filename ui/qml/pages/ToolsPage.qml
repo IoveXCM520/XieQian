@@ -1,8 +1,10 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 
 import ".."
+import "../components"
 
 /*!
     教学工具页。
@@ -93,7 +95,7 @@ Item {
                     text: "随机分组、随机排座，让课堂互动更轻松"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontCaption
+                    font.pixelSize: Theme.fontBody
                 }
             }
 
@@ -162,8 +164,19 @@ Item {
                     spacing: 0
 
                     Item {
+                        id: minusStep
+                        property bool down: false
+
                         width: 38
                         height: parent.height
+                        scale: down ? 0.95 : 1.0
+
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: Theme.durationFast
+                                easing.type: Easing.OutCubic
+                            }
+                        }
 
                         Text {
                             anchors.centerIn: parent
@@ -174,10 +187,12 @@ Item {
                         }
 
                         MouseArea {
+                            id: minusStepMouse
                             anchors.fill: parent
                             cursorShape: page.groupCount > 1
                                          ? Qt.PointingHandCursor
                                          : Qt.ArrowCursor
+                            onPressedChanged: minusStep.down = pressed
                             onClicked: {
                                 if (page.groupCount > 1)
                                     page.groupCount -= 1
@@ -198,8 +213,19 @@ Item {
                     }
 
                     Item {
+                        id: plusStep
+                        property bool down: false
+
                         width: 38
                         height: parent.height
+                        scale: down ? 0.95 : 1.0
+
+                        Behavior on scale {
+                            NumberAnimation {
+                                duration: Theme.durationFast
+                                easing.type: Easing.OutCubic
+                            }
+                        }
 
                         Text {
                             anchors.centerIn: parent
@@ -210,10 +236,12 @@ Item {
                         }
 
                         MouseArea {
+                            id: plusStepMouse
                             anchors.fill: parent
                             cursorShape: page.groupCount < 20
                                          ? Qt.PointingHandCursor
                                          : Qt.ArrowCursor
+                            onPressedChanged: plusStep.down = pressed
                             onClicked: {
                                 if (page.groupCount < 20)
                                     page.groupCount += 1
@@ -296,6 +324,8 @@ Item {
 
                                 property bool shown: false
 
+                                CardShadow {}
+
                                 width: Math.max(220, Math.min(300,
                                                              (groupFlow.width - 14) / 2))
                                 height: groupColumn.childrenRect.height + 30
@@ -347,7 +377,7 @@ Item {
                                             text: "第 " + (index + 1) + " 组"
                                             color: Theme.primary
                                             font.family: Theme.fontFamily
-                                            font.pixelSize: 13
+                                            font.pixelSize: Theme.fontBody
                                             font.weight: Font.DemiBold
                                         }
 
@@ -376,7 +406,7 @@ Item {
                                             text: modelData
                                             color: Theme.textPrimary
                                             font.family: Theme.fontFamily
-                                            font.pixelSize: 13
+                                            font.pixelSize: Theme.fontBody
                                             elide: Text.ElideRight
                                             verticalAlignment: Text.AlignVCenter
                                         }
@@ -443,6 +473,8 @@ Item {
 
                                 property bool shown: false
 
+                                CardShadow {}
+
                                 width: seatGrid.cellWidth
                                 height: seatGrid.cellHeight
                                 radius: Theme.radiusListCard
@@ -481,7 +513,7 @@ Item {
                                     text: modelData
                                     color: Theme.textPrimary
                                     font.family: Theme.fontFamily
-                                    font.pixelSize: 13
+                                    font.pixelSize: Theme.fontBody
                                     font.weight: Font.DemiBold
                                     horizontalAlignment: Text.AlignHCenter
                                     elide: Text.ElideRight
@@ -551,15 +583,28 @@ Item {
                 model: control.labels
 
                 delegate: Item {
+                    id: tabRoot
+
+                    property bool hovered: false
+                    property bool down: false
+
                     width: control.segmentWidth
                     height: control.height
+                    scale: down ? 0.95 : (hovered ? 1.01 : 1.0)
+
+                    Behavior on scale {
+                        NumberAnimation {
+                            duration: Theme.durationFast
+                            easing.type: Easing.OutCubic
+                        }
+                    }
 
                     Text {
                         anchors.centerIn: parent
                         text: modelData
                         color: control.currentIndex === index
                                ? Theme.primary
-                               : Theme.textSecondary
+                               : (tabRoot.hovered ? Theme.textPrimary : Theme.textSecondary)
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontBody
                         font.weight: control.currentIndex === index
@@ -575,9 +620,13 @@ Item {
                     }
 
                     MouseArea {
+                        id: tabMouse
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
+                        onEntered: tabRoot.hovered = true
+                        onExited: tabRoot.hovered = false
+                        onPressedChanged: tabRoot.down = pressed
                         onClicked: {
                             if (control.currentIndex !== index)
                                 control.selected(index)

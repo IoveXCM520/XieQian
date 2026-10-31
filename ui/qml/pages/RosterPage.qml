@@ -1,8 +1,10 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 
 import ".."
+import "../components"
 
 /*!
     名单管理页。
@@ -146,7 +148,7 @@ Item {
                     text: "导入班级名单，或让 AI 生成一份示例名单"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontCaption
+                    font.pixelSize: Theme.fontBody
                 }
             }
 
@@ -274,6 +276,8 @@ Item {
             delegate: Rectangle {
                 id: card
 
+                CardShadow {}
+
                 width: ListView.view ? ListView.view.width : 0
                 height: 72
                 radius: Theme.radiusListCard
@@ -347,7 +351,7 @@ Item {
                             text: modelData.name
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
-                            font.pixelSize: 15
+                            font.pixelSize: Theme.fontBody
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
                         }
@@ -357,7 +361,7 @@ Item {
                             text: modelData.studentId + (modelData.group.length > 0 ? " · " + modelData.group : "")
                             color: Theme.textSecondary
                             font.family: Theme.fontFamily
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontBody
                             elide: Text.ElideRight
                         }
                     }
@@ -371,9 +375,19 @@ Item {
                         color: weightMouse.containsMouse
                                ? Theme.primarySoft
                                : Theme.surfaceAlt
+                        scale: weightMouse.pressed
+                               ? 0.95
+                               : (weightMouse.containsMouse ? 1.02 : 1.0)
 
                         Behavior on color {
                             ColorAnimation {
+                                duration: Theme.durationFast
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+
+                        Behavior on scale {
+                            NumberAnimation {
                                 duration: Theme.durationFast
                                 easing.type: Easing.OutCubic
                             }
@@ -468,7 +482,7 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                         color: Theme.textSecondary
                         font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontCaption
+                        font.pixelSize: Theme.fontBody
                     }
                 }
             }
@@ -493,6 +507,16 @@ Item {
         background: Rectangle {
             radius: Theme.radiusCard
             color: Theme.surface
+
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: Theme.withAlpha(Theme.textPrimary, 0.18)
+                shadowBlur: 0.65
+                shadowVerticalOffset: 12
+                shadowHorizontalOffset: 0
+                autoPaddingEnabled: true
+            }
         }
 
         contentItem: Column {
@@ -514,7 +538,7 @@ Item {
                 text: "权重越高，被抽中的概率越大。"
                 color: Theme.textSecondary
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontCaption
+                font.pixelSize: Theme.fontBody
             }
 
             TextField {

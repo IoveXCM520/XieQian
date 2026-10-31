@@ -38,7 +38,7 @@ ApplicationWindow {
     property int pendingPage: 0
 
     function navigate(page) {
-        var target = Math.max(0, Math.min(4, page))
+        var target = Math.max(0, Math.min(5, page))
         if (target === currentPage && pageStack.currentIndex === target
                 && !pageSwitch.running)
             return
@@ -221,41 +221,45 @@ ApplicationWindow {
 
                 NavItem {
                     iconKind: 0
-                    label: "转盘"
+                    label: "抽奖"
                     selected: window.currentPage === 0
                     onTriggered: window.navigate(0)
                 }
 
                 NavItem {
-                    iconKind: 1
-                    label: "名单"
+                    iconKind: 5
+                    label: "添加"
                     selected: window.currentPage === 1
                     onTriggered: window.navigate(1)
                 }
 
                 NavItem {
-                    iconKind: 2
-                    label: "历史"
+                    iconKind: 1
+                    label: "名单"
                     selected: window.currentPage === 2
                     onTriggered: window.navigate(2)
                 }
 
                 NavItem {
-                    iconKind: 3
-                    label: "工具"
+                    iconKind: 2
+                    label: "历史"
                     selected: window.currentPage === 3
                     onTriggered: window.navigate(3)
                 }
-            }
 
-            NavItem {
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 16
-                iconKind: 4
-                label: "设置"
-                selected: window.currentPage === 4
-                onTriggered: window.navigate(4)
+                NavItem {
+                    iconKind: 3
+                    label: "工具"
+                    selected: window.currentPage === 4
+                    onTriggered: window.navigate(4)
+                }
+
+                NavItem {
+                    iconKind: 4
+                    label: "设置"
+                    selected: window.currentPage === 5
+                    onTriggered: window.navigate(5)
+                }
             }
         }
 
@@ -285,7 +289,19 @@ ApplicationWindow {
                     height: parent.height
                     currentIndex: 0
 
-                    HomePage {}
+                    HomePage {
+                        id: homePage
+                    }
+
+                    AddPage {
+                        id: addPage
+
+                        onWheelCreated: function(name, options) {
+                            homePage.wheelName = name
+                            homePage.wheelOptions = options
+                        }
+                    }
+
                     RosterPage {}
                     HistoryPage {}
                     ToolsPage {}
@@ -421,6 +437,243 @@ ApplicationWindow {
     }
 
     // ═════════════════════════════════════════════════════════════
+    // 启动页：全屏浅色品牌页，2.5 秒后淡出
+    // ═════════════════════════════════════════════════════════════
+    Item {
+        id: splashScreen
+        anchors.fill: parent
+        z: 100000
+        visible: true
+        opacity: 1.0
+
+        Rectangle {
+            id: splashBackground
+            anchors.fill: parent
+            radius: window.isMaximized ? 0 : Theme.radiusWindow
+            color: "#FAFBFC"
+            clip: true
+
+            Canvas {
+                anchors.fill: parent
+                onWidthChanged: requestPaint()
+                onHeightChanged: requestPaint()
+                Component.onCompleted: requestPaint()
+
+                onPaint: {
+                    if (width <= 0 || height <= 0)
+                        return
+
+                    var ctx = getContext("2d")
+                    ctx.clearRect(0, 0, width, height)
+
+                    var cx = width / 2
+                    var cy = height * 0.44
+                    var glow = ctx.createRadialGradient(cx, cy, 0,
+                                                        cx, cy,
+                                                        Math.max(width, height) * 0.56)
+                    glow.addColorStop(0, "rgba(59,139,246,0.075)")
+                    glow.addColorStop(0.52, "rgba(46,212,165,0.028)")
+                    glow.addColorStop(1, "rgba(59,139,246,0)")
+                    ctx.fillStyle = glow
+                    ctx.fillRect(0, 0, width, height)
+                }
+            }
+
+            Column {
+                anchors.centerIn: parent
+                width: 320
+                spacing: 0
+
+                Item {
+                    width: parent.width
+                    height: 132
+
+                    Item {
+                        id: logoBlock
+                        width: 132
+                        height: 132
+                        anchors.centerIn: parent
+                        scale: 0.92
+                        opacity: 0.0
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 168
+                            height: 168
+                            radius: 52
+                            color: Theme.withAlpha(Theme.primary, 0.08)
+                        }
+
+                        Rectangle {
+                            id: logoPlate
+                            anchors.fill: parent
+                            radius: 32
+                            gradient: Theme.primaryGradientVertical
+                            border.width: 1
+                            border.color: Theme.withAlpha(Theme.white, 0.35)
+                            clip: true
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "签"
+                                color: Theme.white
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 58
+                                font.weight: Font.Bold
+                                visible: logoImage.status !== Image.Ready
+                            }
+
+                            Image {
+                                id: logoImage
+                                anchors.fill: parent
+                                source: "qrc:/ui/assets/app-icon-512.png"
+                                fillMode: Image.PreserveAspectFit
+                                sourceSize.width: 264
+                                sourceSize.height: 264
+                                smooth: true
+                                mipmap: true
+                                visible: status === Image.Ready
+                            }
+                        }
+                    }
+                }
+
+                Item { width: 1; height: 24 }
+
+                Text {
+                    width: parent.width
+                    text: "撷签"
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Theme.textPrimary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 36
+                    font.weight: Font.Bold
+                    font.letterSpacing: 3
+                }
+
+                Item { width: 1; height: 6 }
+
+                Text {
+                    width: parent.width
+                    text: "XIE QIAN"
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 10
+                    font.letterSpacing: 5
+                }
+
+                Item { width: 1; height: 12 }
+
+                Text {
+                    width: parent.width
+                    text: "让每一次选择，都值得期待"
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
+                }
+
+                Item { width: 1; height: 32 }
+
+                Item {
+                    width: parent.width
+                    height: 4
+
+                    Rectangle {
+                        id: progressTrack
+                        width: 168
+                        height: 4
+                        radius: 2
+                        anchors.centerIn: parent
+                        color: "#EBEEF3"
+
+                        Rectangle {
+                            id: progressFill
+                            width: 0
+                            height: parent.height
+                            radius: parent.radius
+                            gradient: Theme.primaryGradient
+                        }
+                    }
+                }
+
+                Item { width: 1; height: 12 }
+
+                Text {
+                    width: parent.width
+                    text: "正在准备签盘"
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Theme.textTertiary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 10
+                    font.letterSpacing: 1
+                }
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            hoverEnabled: false
+            onWheel: function(wheel) {
+                wheel.accepted = true
+            }
+        }
+
+        ParallelAnimation {
+            id: splashIntro
+            running: true
+
+            NumberAnimation {
+                target: logoBlock
+                property: "scale"
+                from: 0.92
+                to: 1.0
+                duration: 680
+                easing.type: Easing.OutBack
+            }
+
+            NumberAnimation {
+                target: logoBlock
+                property: "opacity"
+                from: 0.0
+                to: 1.0
+                duration: 520
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        NumberAnimation {
+            id: progressAnimation
+            target: progressFill
+            property: "width"
+            from: 0
+            to: progressTrack.width
+            duration: 2400
+            easing.type: Easing.InOutCubic
+            running: true
+        }
+
+        Timer {
+            interval: 2500
+            running: true
+            repeat: false
+            onTriggered: splashFadeOut.start()
+        }
+
+        NumberAnimation {
+            id: splashFadeOut
+            target: splashScreen
+            property: "opacity"
+            to: 0.0
+            duration: 460
+            easing.type: Easing.OutCubic
+            onFinished: splashScreen.visible = false
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════
     // 侧栏图标
     // ═════════════════════════════════════════════════════════════
     component NavIcon: Canvas {
@@ -520,7 +773,7 @@ ApplicationWindow {
                     ctx.arc(knobs[i], ys[i], 2.4, 0, Math.PI * 2)
                     ctx.stroke()
                 }
-            } else {
+            } else if (kind === 4) {
                 ctx.beginPath()
                 ctx.arc(cx, cy, 6.3, 0, Math.PI * 2)
                 ctx.stroke()
@@ -537,6 +790,15 @@ ApplicationWindow {
 
                 ctx.beginPath()
                 ctx.arc(cx, cy, 2.6, 0, Math.PI * 2)
+                ctx.stroke()
+            } else {
+                // 新增：极简 “+”，用于「添加」导航项
+                ctx.lineWidth = 1.9
+                ctx.beginPath()
+                ctx.moveTo(cx, 4.6)
+                ctx.lineTo(cx, 17.4)
+                ctx.moveTo(4.6, cy)
+                ctx.lineTo(17.4, cy)
                 ctx.stroke()
             }
         }
@@ -563,7 +825,7 @@ ApplicationWindow {
                    ? Theme.primarySoft
                    : (navMouse.containsMouse ? Theme.surfaceAlt : Theme.transparent)
             scale: navMouse.pressed
-                   ? 0.92
+                   ? 0.95
                    : (navMouse.containsMouse ? 1.02 : 1.0)
 
             Behavior on color {
@@ -677,7 +939,7 @@ ApplicationWindow {
             color: mouse.containsMouse
                    ? (control.danger ? Theme.dangerHover : Theme.surfaceAlt)
                    : Theme.transparent
-            scale: mouse.pressed ? 0.92 : 1.0
+            scale: mouse.pressed ? 0.95 : 1.0
 
             Behavior on color {
                 ColorAnimation {

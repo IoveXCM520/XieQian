@@ -1,8 +1,10 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 
 import ".."
+import "../components"
 
 /*!
     历史记录页。
@@ -65,7 +67,7 @@ Item {
                     text: "每一次中签，都值得被记住"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontCaption
+                    font.pixelSize: Theme.fontBody
                 }
             }
 
@@ -128,6 +130,8 @@ Item {
 
             delegate: Rectangle {
                 id: card
+
+                CardShadow {}
 
                 width: ListView.view ? ListView.view.width : 0
                 height: 68
@@ -193,7 +197,7 @@ Item {
                             text: modelData.name
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
-                            font.pixelSize: 15
+                            font.pixelSize: Theme.fontBody
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
                         }
@@ -205,7 +209,7 @@ Item {
                                   : "中签记录"
                             color: Theme.textSecondary
                             font.family: Theme.fontFamily
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontBody
                             elide: Text.ElideRight
                         }
                     }
@@ -334,7 +338,7 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                         color: Theme.textSecondary
                         font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontCaption
+                        font.pixelSize: Theme.fontBody
                     }
                 }
             }

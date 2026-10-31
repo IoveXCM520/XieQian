@@ -108,6 +108,15 @@ Item {
         }
     }
 
+    // 贺卡外投影（独立一层，避免整张贺卡 layer 后内容在软件渲染下丢失）
+    CardShadowBehind {
+        z: 0
+        target: card
+        shadowBlur: 0.75
+        shadowOffsetY: 18
+        shadowColor: Theme.withAlpha(Theme.textPrimary, 0.22)
+    }
+
     // 贺卡
     Rectangle {
         id: card
@@ -121,16 +130,6 @@ Item {
         radius: Theme.radiusDialog
         color: Theme.surface
         scale: resultCard.opened ? 1.0 : 0.96
-
-        layer.enabled: true
-        layer.effect: MultiEffect {
-            shadowEnabled: true
-            shadowColor: Theme.withAlpha(Theme.textPrimary, 0.22)
-            shadowBlur: 0.75
-            shadowVerticalOffset: 18
-            shadowHorizontalOffset: 0
-            autoPaddingEnabled: true
-        }
 
         Behavior on scale {
             NumberAnimation {
@@ -386,8 +385,7 @@ Item {
             ctx.clearRect(0, 0, width, height)
 
             var size = fontPixelSize
-            var family = Theme.fontFamily
-            var font = "bold " + size + "px '" + family + "'"
+            var font = "bold " + size + "px sans-serif"
             ctx.font = font
 
             while (ctx.measureText(text).width > width - 12 && size > 12) {
@@ -441,6 +439,34 @@ Item {
         }
 
         Rectangle {
+            id: buttonShadowSource
+            anchors.fill: parent
+            radius: height / 2
+            color: Theme.transparent
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop {
+                    position: 0.0
+                    color: button.primary ? Theme.primary : Theme.surface
+                }
+                GradientStop {
+                    position: 1.0
+                    color: button.primary ? Theme.primaryEnd : Theme.surface
+                }
+            }
+
+            layer.enabled: button.primary
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: Theme.withAlpha(Theme.primary, 0.22)
+                shadowBlur: 0.55
+                shadowVerticalOffset: 6
+                shadowHorizontalOffset: 0
+                autoPaddingEnabled: true
+            }
+        }
+
+        Rectangle {
             anchors.fill: parent
             radius: height / 2
             color: Theme.transparent
@@ -459,16 +485,6 @@ Item {
             border.color: button.primary
                           ? Theme.withAlpha(Theme.white, 0.18)
                           : Theme.border
-
-            layer.enabled: button.primary
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowColor: Theme.withAlpha(Theme.primary, 0.22)
-                shadowBlur: 0.55
-                shadowVerticalOffset: 6
-                shadowHorizontalOffset: 0
-                autoPaddingEnabled: true
-            }
         }
 
         Rectangle {

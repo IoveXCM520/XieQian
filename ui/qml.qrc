@@ -14,14 +14,17 @@
         <file>qml/qmldir</file>
 
         <file>qml/pages/HomePage.qml</file>
+        <file>qml/pages/AddPage.qml</file>
         <file>qml/pages/RosterPage.qml</file>
         <file>qml/pages/HistoryPage.qml</file>
         <file>qml/pages/ToolsPage.qml</file>
         <file>qml/pages/SettingsPage.qml</file>
 
         <file>qml/components/WheelItem.qml</file>
-        <file>qml/components/FlipCardItem.qml</file>
-        <file>qml/components/BlindBoxItem.qml</file>
         <file>qml/components/ResultCard.qml</file>
+        <file>qml/components/CardShadow.qml</file>
+        <file>qml/components/CardShadowBehind.qml</file>
+
+        <file>assets/app-icon-512.png</file>
     </qresource>
 </RCC>
