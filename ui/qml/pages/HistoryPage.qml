@@ -71,24 +71,73 @@ Item {
                 }
             }
 
-            Rectangle {
+            Row {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                height: 32
-                width: historyCount.implicitWidth + 22
-                radius: 16
-                color: Theme.surface
-                border.width: 1
-                border.color: Theme.withAlpha(Theme.primary, 0.10)
+                spacing: 10
 
-                Text {
-                    id: historyCount
-                    anchors.centerIn: parent
-                    text: page.recordCount + " 条"
-                    color: Theme.textPrimary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontCaption
-                    font.weight: Font.DemiBold
+                Rectangle {
+                    id: clearButton
+
+                    width: clearLabel.implicitWidth + 26
+                    height: 32
+                    radius: 16
+                    enabled: page.recordCount > 0
+                    opacity: enabled ? 1.0 : 0.45
+                    color: clearMouse.containsMouse ? Theme.dangerSoft : Theme.surface
+                    border.width: 1
+                    border.color: clearMouse.containsMouse
+                                  ? Theme.withAlpha(Theme.danger, 0.35)
+                                  : Theme.border
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: Theme.durationFast
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+
+                    Text {
+                        id: clearLabel
+                        anchors.centerIn: parent
+                        text: "清空所有历史"
+                        color: clearMouse.containsMouse ? Theme.danger : Theme.textPrimary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontCaption
+                        font.weight: Font.DemiBold
+                    }
+
+                    MouseArea {
+                        id: clearMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: clearButton.enabled
+                                     ? Qt.PointingHandCursor
+                                     : Qt.ArrowCursor
+                        onClicked: {
+                            if (clearButton.enabled)
+                                clearDialog.open()
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 32
+                    width: historyCount.implicitWidth + 22
+                    radius: 16
+                    color: Theme.surface
+                    border.width: 1
+                    border.color: Theme.withAlpha(Theme.primary, 0.10)
+
+                    Text {
+                        id: historyCount
+                        anchors.centerIn: parent
+                        text: page.recordCount + " 条"
+                        color: Theme.textPrimary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontCaption
+                        font.weight: Font.DemiBold
+                    }
                 }
             }
         }
@@ -162,6 +211,21 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.ArrowCursor
+                }
+
+                // 左侧渐变竖线，给单调的卡片一条视觉引导
+                Rectangle {
+                    width: 3
+                    height: 34
+                    radius: 1.5
+                    anchors.left: parent.left
+                    anchors.leftMargin: 9
+                    anchors.verticalCenter: parent.verticalCenter
+                    gradient: Gradient {
+                        orientation: Gradient.Vertical
+                        GradientStop { position: 0.0; color: Theme.primary }
+                        GradientStop { position: 1.0; color: Theme.primaryEnd }
+                    }
                 }
 
                 RowLayout {
@@ -342,6 +406,144 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 清空历史确认
+    // ─────────────────────────────────────────────────────────────
+    Dialog {
+        id: clearDialog
+
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        width: 380
+        padding: 24
+
+        background: Rectangle {
+            radius: Theme.radiusCard
+            color: Theme.surface
+
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: Theme.withAlpha(Theme.textPrimary, 0.18)
+                shadowBlur: 0.65
+                shadowVerticalOffset: 12
+                shadowHorizontalOffset: 0
+                autoPaddingEnabled: true
+            }
+        }
+
+        contentItem: Column {
+            width: 380 - 48
+            spacing: 14
+
+            Text {
+                width: parent.width
+                text: "清空全部 " + page.recordCount + " 条历史？"
+                color: Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontH2
+                font.weight: Font.DemiBold
+                elide: Text.ElideRight
+            }
+
+            Text {
+                width: parent.width
+                text: "名单与自定义转盘不受影响，中签记录删除后无法恢复。"
+                color: Theme.textSecondary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                wrapMode: Text.WordWrap
+            }
+
+            Item {
+                width: parent.width
+                height: 40
+
+                Row {
+                    anchors.right: parent.right
+                    height: parent.height
+                    spacing: 10
+
+                    DialogButton {
+                        width: 92
+                        height: 40
+                        label: "取消"
+                        onClicked: clearDialog.reject()
+                    }
+
+                    DialogButton {
+                        width: 92
+                        height: 40
+                        label: "清空"
+                        danger: true
+                        onClicked: clearDialog.accept()
+                    }
+                }
+            }
+        }
+
+        onAccepted: backendBridge.clearHistory()
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 对话框按钮
+    // ─────────────────────────────────────────────────────────────
+    component DialogButton: Item {
+        id: button
+
+        property string label: ""
+        property bool danger: false
+        signal clicked()
+
+        width: 92
+        height: 40
+        scale: mouse.pressed ? 0.95 : (mouse.containsMouse ? 1.02 : 1.0)
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: button.danger
+                   ? (mouse.containsMouse ? Theme.dangerSoft : Theme.surface)
+                   : (mouse.containsMouse ? Theme.surfaceAlt : Theme.surface)
+            border.width: 1
+            border.color: button.danger
+                          ? Theme.withAlpha(Theme.danger, 0.45)
+                          : Theme.border
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        Text {
+            anchors.centerIn: parent
+            text: button.label
+            color: button.danger ? Theme.danger : Theme.textPrimary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontCaption
+            font.weight: Font.DemiBold
+        }
+
+        MouseArea {
+            id: mouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: button.clicked()
         }
     }
 }

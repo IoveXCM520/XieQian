@@ -59,7 +59,8 @@ Item {
 
         spinActive = true
         spinAnimation.from = angle
-        spinAnimation.to = angle + 1440 + alignment
+        // 5 整圈 + 落点偏移：落点偏移保证指针停在目标扇区中心
+        spinAnimation.to = angle + 1800 + alignment
         spinAnimation.start()
     }
 
@@ -184,9 +185,16 @@ Item {
                 ctx.fillStyle = vignette
                 ctx.fill()
 
-                // 4. 放射文字：白色 14px 加粗 + 深色阴影
+                // 4. 放射文字：选项越多字号越小，避免文字挤压重叠
                 // 使用通用 sans-serif，避免 Canvas 字体库找不到品牌字体时回退成默认 10px
-                ctx.font = "bold 14px sans-serif"
+                var fontSize = 14
+                if (count > 24)
+                    fontSize = 9
+                else if (count > 16)
+                    fontSize = 11
+                else if (count > 10)
+                    fontSize = 12
+                ctx.font = "bold " + fontSize + "px sans-serif"
 
                 for (var j = 0; j < count; ++j) {
                     var mid = start + (j + 0.5) * step
@@ -210,7 +218,10 @@ Item {
                     ctx.shadowOffsetY = flipped ? -1.4 : 1.4
 
                     var text = String(labels[j])
-                    var maxWidth = radius * 0.50
+                    // 同时受半径与扇区弧长约束，扇区越窄允许的字宽越小
+                    var arcWidth = 2 * Math.sin(step / 2) * radius * 0.66 * 0.86
+                    var maxWidth = Math.min(radius * 0.50,
+                                            Math.max(radius * 0.16, arcWidth))
                     if (ctx.measureText(text).width > maxWidth) {
                         var clipped = text
                         while (clipped.length > 1

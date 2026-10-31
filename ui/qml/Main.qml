@@ -38,6 +38,27 @@ ApplicationWindow {
     property int currentPage: 0
     property int pendingPage: 0
     property bool resultOpen: false
+    // 记录还原前的窗口位置，供最大化状态下拖动标题栏时使用
+    property rect normalGeometry: Qt.rect(0, 0, 1200, 800)
+
+    onVisibilityChanged: {
+        if (visibility === Window.Windowed)
+            Qt.callLater(window.recordNormalGeometry)
+
+        // 最大化/还原会打断页面切换动画，复位避免内容停留在偏移位置
+        pageSwitch.stop()
+        pageStack.y = 0
+        pageViewport.opacity = 1.0
+    }
+
+    // 延迟到窗口状态切换完成后再采样，避免把最大化尺寸当成还原尺寸
+    function recordNormalGeometry() {
+        if (visibility !== Window.Windowed || width <= 0 || height <= 0)
+            return
+        if (screen && width >= screen.width && height >= screen.height)
+            return
+        normalGeometry = Qt.rect(x, y, width, height)
+    }
 
     function showResult(names) {
         resultCard.open(names)
@@ -69,7 +90,7 @@ ApplicationWindow {
     }
 
     function toggleMaximize() {
-        if (isMaximized)
+        if (visibility === Window.Maximized || visibility === Window.FullScreen)
             showNormal()
         else
             showMaximized()
@@ -84,7 +105,10 @@ ApplicationWindow {
         border.color: Theme.withAlpha(Theme.textPrimary, 0.06)
         clip: true
 
+        // 最大化时立即变直角，不要有过渡动画，避免四角瞬间露出桌面
         Behavior on radius {
+            enabled: !window.isMaximized
+
             NumberAnimation {
                 duration: Theme.durationFast
                 easing.type: Easing.OutCubic
@@ -120,11 +144,35 @@ ApplicationWindow {
                     if (!pressed || moving)
                         return
 
-                    if (Math.abs(mouse.x - pressPoint.x) > 4
-                            || Math.abs(mouse.y - pressPoint.y) > 4) {
-                        moving = true
-                        window.startSystemMove()
+                    if (Math.abs(mouse.x - pressPoint.x) <= 4
+                            && Math.abs(mouse.y - pressPoint.y) <= 4)
+                        return
+
+                    moving = true
+
+                    // 最大化状态下 startSystemMove() 不会生效：先按指针比例还原窗口尺寸，
+                    // 再让系统接管拖动，避免出现“拖不动”或窗口被拽变形
+                    if (window.visibility === Window.Maximized
+                            || window.visibility === Window.FullScreen) {
+                        var scenePoint = titleDragArea.mapToItem(null, mouse.x, mouse.y)
+                        var screenX = window.x + scenePoint.x
+                        var screenY = window.y + scenePoint.y
+                        var ratio = window.width > 0 ? scenePoint.x / window.width : 0.5
+                        var screenWidth = window.screen ? window.screen.width : window.width
+                        var screenHeight = window.screen ? window.screen.height : window.height
+                        var restoreWidth = Math.max(window.minimumWidth,
+                                                    Math.min(window.normalGeometry.width, screenWidth))
+                        var restoreHeight = Math.max(window.minimumHeight,
+                                                     Math.min(window.normalGeometry.height, screenHeight))
+
+                        window.showNormal()
+                        window.width = restoreWidth
+                        window.height = restoreHeight
+                        window.x = Math.round(screenX - ratio * restoreWidth)
+                        window.y = Math.round(screenY - mouse.y)
                     }
+
+                    window.startSystemMove()
                 }
 
                 onReleased: function(mouse) {
@@ -132,6 +180,8 @@ ApplicationWindow {
                 }
 
                 onDoubleClicked: function(mouse) {
+                    if (moving)
+                        return
                     window.toggleMaximize()
                 }
             }
@@ -260,17 +310,17 @@ ApplicationWindow {
                 spacing: 8
 
                 NavItem {
-                    iconKind: 7
-                    label: "关于"
-                    selected: window.currentPage === 5
-                    onTriggered: window.navigate(5)
-                }
-
-                NavItem {
                     iconKind: 4
                     label: "设置"
                     selected: window.currentPage === 6
                     onTriggered: window.navigate(6)
+                }
+
+                NavItem {
+                    iconKind: 7
+                    label: "关于"
+                    selected: window.currentPage === 5
+                    onTriggered: window.navigate(5)
                 }
             }
         }
@@ -487,6 +537,7 @@ ApplicationWindow {
             Canvas {
                 id: splashBackdrop
                 anchors.fill: parent
+                z: 1
 
                 // 固定种子生成，窗口缩放时粒子位置不会抽动
                 property var particles: []
@@ -501,9 +552,9 @@ ApplicationWindow {
                         seed = (seed * 48271) % 2147483647
                         var y = seed / 2147483647
                         seed = (seed * 48271) % 2147483647
-                        var radius = 0.7 + (seed / 2147483647) * 2.0
+                        var radius = 1.2 + (seed / 2147483647) * 2.4
                         seed = (seed * 48271) % 2147483647
-                        var alpha = 0.02 + (seed / 2147483647) * 0.055
+                        var alpha = 0.08 + (seed / 2147483647) * 0.14
                         list.push({ "x": x, "y": y, "r": radius,
                                     "a": alpha, "green": (i % 4 === 0) })
                     }
@@ -517,6 +568,7 @@ ApplicationWindow {
 
                 onWidthChanged: requestPaint()
                 onHeightChanged: requestPaint()
+                onVisibleChanged: if (visible) requestPaint()
 
                 onPaint: {
                     if (width <= 0 || height <= 0)
@@ -552,6 +604,7 @@ ApplicationWindow {
                 anchors.centerIn: parent
                 width: 400
                 spacing: 0
+                z: 2
 
                 Item {
                     width: parent.width

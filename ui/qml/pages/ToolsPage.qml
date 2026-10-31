@@ -18,12 +18,42 @@ Item {
     readonly property bool reducedMotion: !backendBridge.motionEnabled
     readonly property int modeGroups: 0
     readonly property int modeSeats: 1
+    readonly property int modeCalculator: 2
     readonly property int seatColumns: 6
 
     property int mode: modeGroups
     property int groupCount: 4
     property var groups: []
     property var seats: []
+
+    // ── 计算器状态 ──
+    property string calcDisplay: "0"
+    property string calcExpression: ""
+    property real calcAccumulator: 0
+    property string calcPendingOp: ""
+    property bool calcFresh: true
+
+    readonly property var calcKeys: [
+        { "label": "C", "action": "clear", "row": 0, "column": 0, "accent": true },
+        { "label": "⌫", "action": "back", "row": 0, "column": 1, "accent": true },
+        { "label": "÷", "action": "op:÷", "row": 0, "column": 2, "accent": true },
+        { "label": "×", "action": "op:×", "row": 0, "column": 3, "accent": true },
+        { "label": "7", "action": "digit:7", "row": 1, "column": 0 },
+        { "label": "8", "action": "digit:8", "row": 1, "column": 1 },
+        { "label": "9", "action": "digit:9", "row": 1, "column": 2 },
+        { "label": "−", "action": "op:−", "row": 1, "column": 3, "accent": true },
+        { "label": "4", "action": "digit:4", "row": 2, "column": 0 },
+        { "label": "5", "action": "digit:5", "row": 2, "column": 1 },
+        { "label": "6", "action": "digit:6", "row": 2, "column": 2 },
+        { "label": "+", "action": "op:+", "row": 2, "column": 3, "accent": true },
+        { "label": "1", "action": "digit:1", "row": 3, "column": 0 },
+        { "label": "2", "action": "digit:2", "row": 3, "column": 1 },
+        { "label": "3", "action": "digit:3", "row": 3, "column": 2 },
+        { "label": "=", "action": "equals", "row": 3, "column": 3,
+          "rowSpan": 2, "accent": true },
+        { "label": "0", "action": "digit:0", "row": 4, "column": 0, "columnSpan": 2 },
+        { "label": ".", "action": "dot", "row": 4, "column": 2 }
+    ]
 
     readonly property int rosterCount: backendBridge.rosterCount
     readonly property int groupedCount: {
@@ -50,8 +80,155 @@ Item {
     function generate() {
         if (mode === modeGroups)
             startGrouping()
-        else
+        else if (mode === modeSeats)
             startSeating()
+    }
+
+    function calcClear() {
+        calcDisplay = "0"
+        calcExpression = ""
+        calcAccumulator = 0
+        calcPendingOp = ""
+        calcFresh = true
+    }
+
+    function calcFail() {
+        calcDisplay = "错误"
+        calcExpression = ""
+        calcAccumulator = 0
+        calcPendingOp = ""
+        calcFresh = true
+    }
+
+    function calcFormat(value) {
+        if (!isFinite(value))
+            return "错误"
+
+        var rounded = Math.round(value * 1e10) / 1e10
+        if (Math.abs(rounded) >= 1e12)
+            return rounded.toExponential(6)
+        return String(rounded)
+    }
+
+    function calcInputDigit(digit) {
+        if (calcDisplay === "错误")
+            calcClear()
+
+        var text = calcFresh ? "" : calcDisplay
+        if (text === "0")
+            text = ""
+        if (text.replace(/[^0-9]/g, "").length >= 12)
+            return
+
+        text += digit
+        calcDisplay = text.length === 0 ? "0" : text
+        calcFresh = false
+    }
+
+    function calcInputDot() {
+        if (calcDisplay === "错误")
+            calcClear()
+
+        if (calcFresh) {
+            calcDisplay = "0."
+            calcFresh = false
+            return
+        }
+
+        if (calcDisplay.indexOf(".") === -1)
+            calcDisplay += "."
+    }
+
+    function calcBackspace() {
+        if (calcDisplay === "错误") {
+            calcClear()
+            return
+        }
+
+        if (calcFresh)
+            return
+
+        var text = calcDisplay.substring(0, calcDisplay.length - 1)
+        if (text.length === 0 || text === "-")
+            text = "0"
+
+        calcDisplay = text
+        if (text === "0")
+            calcFresh = true
+    }
+
+    function calcApply(left, op, right) {
+        if (op === "+")
+            return left + right
+        if (op === "−")
+            return left - right
+        if (op === "×")
+            return left * right
+        if (op === "÷")
+            return right === 0 ? NaN : left / right
+        return right
+    }
+
+    function calcSetOperator(op) {
+        if (calcDisplay === "错误")
+            return
+
+        var value = parseFloat(calcDisplay)
+        if (isNaN(value))
+            value = 0
+
+        if (calcPendingOp !== "" && !calcFresh)
+            calcAccumulator = calcApply(calcAccumulator, calcPendingOp, value)
+        else if (calcPendingOp === "")
+            calcAccumulator = value
+
+        if (!isFinite(calcAccumulator)) {
+            calcFail()
+            return
+        }
+
+        calcPendingOp = op
+        calcExpression = calcFormat(calcAccumulator) + " " + op
+        calcDisplay = calcFormat(calcAccumulator)
+        calcFresh = true
+    }
+
+    function calcEquals() {
+        if (calcPendingOp === "" || calcDisplay === "错误")
+            return
+
+        var operand = calcFresh ? calcAccumulator : parseFloat(calcDisplay)
+        if (isNaN(operand))
+            operand = 0
+
+        var result = calcApply(calcAccumulator, calcPendingOp, operand)
+        if (!isFinite(result)) {
+            calcFail()
+            return
+        }
+
+        calcExpression = calcFormat(calcAccumulator) + " " + calcPendingOp
+                         + " " + calcFormat(operand) + " ="
+        calcDisplay = calcFormat(result)
+        calcAccumulator = result
+        calcPendingOp = ""
+        calcFresh = true
+    }
+
+    function pressCalcKey(action) {
+        if (action === "clear") {
+            calcClear()
+        } else if (action === "back") {
+            calcBackspace()
+        } else if (action === "dot") {
+            calcInputDot()
+        } else if (action === "equals") {
+            calcEquals()
+        } else if (action.indexOf("digit:") === 0) {
+            calcInputDigit(action.substring(6))
+        } else if (action.indexOf("op:") === 0) {
+            calcSetOperator(action.substring(3))
+        }
     }
 
     Connections {
@@ -92,7 +269,7 @@ Item {
                 }
 
                 Text {
-                    text: "随机分组、随机排座，让课堂互动更轻松"
+                    text: "随机分组、随机排座，还有随手可用的计算器"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontBody
@@ -133,7 +310,7 @@ Item {
             spacing: 12
 
             ToolSegment {
-                width: 288
+                width: 348
                 height: 44
                 currentIndex: page.mode
                 onSelected: function(index) {
@@ -252,6 +429,7 @@ Item {
             }
 
             ToolAction {
+                visible: page.mode !== page.modeCalculator
                 width: 154
                 height: 44
                 primary: true
@@ -267,6 +445,8 @@ Item {
             anchors.topMargin: 10
             anchors.left: parent.left
             text: {
+                if (page.mode === page.modeCalculator)
+                    return ""
                 if (page.mode === page.modeGroups) {
                     if (page.groups.length === 0)
                         return ""
@@ -536,6 +716,102 @@ Item {
                     visible: page.seats.length === 0
                 }
             }
+
+            // 计算器
+            Item {
+                Flickable {
+                    id: calcFlick
+
+                    anchors.fill: parent
+                    clip: true
+                    contentWidth: width
+                    contentHeight: calcColumn.height + 16
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    ScrollBar.vertical: ScrollBar {
+                        width: 0
+                        policy: ScrollBar.AlwaysOff
+                    }
+
+                    Column {
+                        id: calcColumn
+
+                        width: Math.min(340, calcFlick.width)
+                        x: Math.max(0, (calcFlick.width - width) / 2)
+                        y: 4
+                        spacing: 12
+
+                        // 显示屏
+                        Rectangle {
+                            width: parent.width
+                            height: 104
+                            radius: Theme.radiusCard
+                            color: Theme.surface
+                            border.width: 1
+                            border.color: Theme.withAlpha(Theme.textPrimary, 0.05)
+
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 18
+                                spacing: 4
+
+                                Text {
+                                    width: parent.width
+                                    height: 20
+                                    text: page.calcExpression
+                                    horizontalAlignment: Text.AlignRight
+                                    verticalAlignment: Text.AlignVCenter
+                                    color: Theme.textTertiary
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: Theme.fontCaption
+                                    elide: Text.ElideLeft
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    height: parent.height - 24
+                                    text: page.calcDisplay
+                                    horizontalAlignment: Text.AlignRight
+                                    verticalAlignment: Text.AlignVCenter
+                                    color: page.calcDisplay === "错误"
+                                           ? Theme.danger
+                                           : Theme.textPrimary
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: page.calcDisplay.length > 10 ? 24 : 36
+                                    font.weight: Font.Bold
+                                    elide: Text.ElideLeft
+                                }
+                            }
+                        }
+
+                        // 4 列键盘：数字、四则运算、小数点与清零
+                        GridLayout {
+                            width: parent.width
+                            columns: 4
+                            columnSpacing: 8
+                            rowSpacing: 8
+
+                            Repeater {
+                                model: page.calcKeys
+
+                                delegate: CalcKey {
+                                    Layout.row: modelData.row
+                                    Layout.column: modelData.column
+                                    Layout.rowSpan: modelData.rowSpan ? modelData.rowSpan : 1
+                                    Layout.columnSpan: modelData.columnSpan ? modelData.columnSpan : 1
+                                    Layout.preferredWidth: 79 * (modelData.columnSpan ? modelData.columnSpan : 1)
+                                                          + 8 * ((modelData.columnSpan ? modelData.columnSpan : 1) - 1)
+                                    Layout.preferredHeight: 52 * (modelData.rowSpan ? modelData.rowSpan : 1)
+                                                           + 8 * ((modelData.rowSpan ? modelData.rowSpan : 1) - 1)
+                                    label: modelData.label
+                                    accent: modelData.accent === true
+                                    onTriggered: page.pressCalcKey(modelData.action)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -546,8 +822,8 @@ Item {
         id: control
 
         property int currentIndex: 0
-        readonly property real segmentWidth: Math.max(0, (width - 8) / 2)
-        readonly property var labels: ["随机分组", "随机排座位"]
+        readonly property real segmentWidth: Math.max(0, (width - 8) / control.labels.length)
+        readonly property var labels: ["随机分组", "随机排座位", "计算器"]
         signal selected(int index)
 
         Rectangle {
@@ -634,6 +910,64 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 计算器按键
+    // ─────────────────────────────────────────────────────────────
+    component CalcKey: Item {
+        id: key
+
+        property string label: ""
+        property bool accent: false
+        signal triggered()
+
+        implicitWidth: 79
+        implicitHeight: 52
+        scale: mouse.pressed ? 0.95 : (mouse.containsMouse ? 1.03 : 1.0)
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: 14
+            color: key.accent
+                   ? (mouse.containsMouse ? Theme.primarySoftGreen : Theme.primarySoft)
+                   : (mouse.containsMouse ? Theme.surfaceAlt : Theme.surface)
+            border.width: 1
+            border.color: key.accent
+                          ? Theme.withAlpha(Theme.primary, 0.22)
+                          : Theme.withAlpha(Theme.textPrimary, 0.06)
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        Text {
+            anchors.centerIn: parent
+            text: key.label
+            color: key.accent ? Theme.primary : Theme.textPrimary
+            font.family: Theme.fontFamily
+            font.pixelSize: key.label.length > 1 ? 18 : 20
+            font.weight: Font.DemiBold
+        }
+
+        MouseArea {
+            id: mouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: key.triggered()
         }
     }
 

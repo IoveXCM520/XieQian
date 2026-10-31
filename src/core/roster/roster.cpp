@@ -34,6 +34,16 @@ void Roster::setWeight(std::size_t index, double weight)
     participants_.at(index).weight = weight;
 }
 
+bool Roster::removeAt(std::size_t index)
+{
+    if (index >= participants_.size()) {
+        return false;
+    }
+
+    participants_.erase(participants_.begin() + static_cast<std::ptrdiff_t>(index));
+    return true;
+}
+
 std::string participantId(const Participant &participant)
 {
     return participant.studentId.empty() ? participant.name : participant.studentId;

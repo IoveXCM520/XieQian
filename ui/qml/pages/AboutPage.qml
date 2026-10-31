@@ -132,7 +132,7 @@ Item {
                 Text {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
-                    text: "v1.0.6 (Build 2026)"
+                    text: "v1.0.7 (Build 2026)"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontBody

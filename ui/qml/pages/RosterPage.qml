@@ -16,6 +16,8 @@ Item {
     id: page
 
     property var participants: []
+    property string removeTargetId: ""
+    property string removeTargetName: ""
 
     readonly property bool loading: backendBridge.rosterLoading
     readonly property int totalCount: backendBridge.rosterCount
@@ -63,6 +65,12 @@ Item {
         weightDialog.targetName = item.name
         weightField.text = item.weight.toString()
         weightDialog.open()
+    }
+
+    function requestRemove(item) {
+        removeTargetId = item.id
+        removeTargetName = item.name
+        removeDialog.open()
     }
 
     Component.onCompleted: refresh()
@@ -360,6 +368,68 @@ Item {
                             font.weight: Font.DemiBold
                         }
                     }
+
+                    // 移除该成员：点击后需要确认，避免误触
+                    Item {
+                        id: removeAction
+
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.preferredWidth: 32
+                        Layout.preferredHeight: 32
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 9
+                            color: removeMouse.containsMouse
+                                   ? Theme.dangerSoft
+                                   : Theme.transparent
+
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: Theme.durationFast
+                                    easing.type: Easing.OutCubic
+                                }
+                            }
+                        }
+
+                        Canvas {
+                            id: removeIcon
+
+                            width: 14
+                            height: 14
+                            anchors.centerIn: parent
+                            opacity: removeMouse.containsMouse ? 1.0 : 0.6
+
+                            onWidthChanged: requestPaint()
+                            onHeightChanged: requestPaint()
+                            Component.onCompleted: requestPaint()
+
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.clearRect(0, 0, width, height)
+                                ctx.strokeStyle = removeMouse.containsMouse
+                                                 ? String(Theme.danger)
+                                                 : String(Theme.textSecondary)
+                                ctx.lineWidth = 1.5
+                                ctx.lineCap = "round"
+                                ctx.beginPath()
+                                ctx.moveTo(2.5, 2.5)
+                                ctx.lineTo(11.5, 11.5)
+                                ctx.moveTo(11.5, 2.5)
+                                ctx.lineTo(2.5, 11.5)
+                                ctx.stroke()
+                            }
+                        }
+
+                        MouseArea {
+                            id: removeMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onContainsMouseChanged: removeIcon.requestPaint()
+                            onClicked: page.requestRemove(modelData)
+                        }
+                    }
                 }
             }
 
@@ -535,6 +605,86 @@ Item {
             backendBridge.updateParticipantWeight(weightDialog.targetId,
                                                   parseFloat(weightField.text))
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 移除成员确认
+    // ─────────────────────────────────────────────────────────────
+    Dialog {
+        id: removeDialog
+
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        width: 380
+        padding: 24
+
+        background: Rectangle {
+            radius: Theme.radiusCard
+            color: Theme.surface
+
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: Theme.withAlpha(Theme.textPrimary, 0.18)
+                shadowBlur: 0.65
+                shadowVerticalOffset: 12
+                shadowHorizontalOffset: 0
+                autoPaddingEnabled: true
+            }
+        }
+
+        contentItem: Column {
+            width: 380 - 48
+            spacing: 14
+
+            Text {
+                width: parent.width
+                text: "从名单中移除「" + page.removeTargetName + "」？"
+                color: Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontH2
+                font.weight: Font.DemiBold
+                elide: Text.ElideRight
+            }
+
+            Text {
+                width: parent.width
+                text: "移除后该成员不再参与抽签，已产生的抽取历史会保留。"
+                color: Theme.textSecondary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                wrapMode: Text.WordWrap
+            }
+
+            Item {
+                width: parent.width
+                height: 40
+
+                Row {
+                    anchors.right: parent.right
+                    height: parent.height
+                    spacing: 10
+
+                    RosterButton {
+                        width: 92
+                        height: 40
+                        text: "取消"
+                        onClicked: removeDialog.reject()
+                    }
+
+                    RosterButton {
+                        width: 100
+                        height: 40
+                        text: "移除"
+                        primary: true
+                        onClicked: removeDialog.accept()
+                    }
+                }
+            }
+        }
+
+        onAccepted: backendBridge.removeParticipant(page.removeTargetId)
     }
 
     // ─────────────────────────────────────────────────────────────

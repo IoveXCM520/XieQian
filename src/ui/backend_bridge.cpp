@@ -374,6 +374,24 @@ void BackendBridge::updateParticipantWeight(const QString &id, double weight)
     }
 }
 
+bool BackendBridge::removeParticipant(const QString &id)
+{
+    if (id.isEmpty()) {
+        return false;
+    }
+
+    const std::string key = id.toStdString();
+    for (std::size_t index = 0; index < roster_->size(); ++index) {
+        if (xieqian::core::participantId(roster_->at(index)) == key) {
+            roster_->removeAt(index);
+            saveState();
+            emit rosterUpdated();
+            return true;
+        }
+    }
+    return false;
+}
+
 bool BackendBridge::saveCustomWheel(const QString &name, const QVariantList &options)
 {
     const QString wheelName = name.trimmed();
@@ -404,6 +422,31 @@ bool BackendBridge::saveCustomWheel(const QString &name, const QVariantList &opt
     }
 
     activeWheelName_ = wheelName;
+    saveState();
+    emit customWheelsChanged();
+    return true;
+}
+
+bool BackendBridge::removeCustomWheel(const QString &name)
+{
+    const QString wheelName = name.trimmed();
+    if (wheelName.isEmpty()) {
+        return false;
+    }
+
+    const auto wheel = std::find_if(customWheels_.begin(), customWheels_.end(),
+                                    [&wheelName](const CustomWheel &entry) {
+                                        return entry.name == wheelName;
+                                    });
+    if (wheel == customWheels_.end()) {
+        return false;
+    }
+
+    customWheels_.erase(wheel);
+    if (activeWheelName_ == wheelName) {
+        activeWheelName_ = customWheels_.empty() ? QString() : customWheels_.back().name;
+    }
+
     saveState();
     emit customWheelsChanged();
     return true;
@@ -458,6 +501,17 @@ QVariantList BackendBridge::getHistory()
         history.append(record);
     }
     return history;
+}
+
+void BackendBridge::clearHistory()
+{
+    if (history_.empty()) {
+        return;
+    }
+
+    history_.clear();
+    saveState();
+    emit historyUpdated();
 }
 
 void BackendBridge::clearAllData()

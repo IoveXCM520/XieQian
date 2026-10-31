@@ -44,6 +44,21 @@ TEST_CASE("Disabled participants are excluded from candidates", "[roster]") {
     REQUIRE(afterDisable[1].name == "顾南乔");
 }
 
+TEST_CASE("RemoveAt drops one participant and shifts the rest", "[roster]") {
+    Roster roster;
+    roster.add("苏婉宁");
+    roster.add("林砚舟");
+    roster.add("顾南乔");
+
+    REQUIRE(roster.removeAt(1));
+    REQUIRE(roster.size() == 2);
+    REQUIRE(roster.at(0).name == "苏婉宁");
+    REQUIRE(roster.at(1).name == "顾南乔");
+
+    REQUIRE_FALSE(roster.removeAt(5));
+    REQUIRE(roster.size() == 2);
+}
+
 TEST_CASE("Clear removes all participants", "[roster]") {
     Roster roster;
     roster.add("苏婉宁");

@@ -47,10 +47,13 @@ public:
     Q_INVOKABLE QVariantList getParticipantsWithStatus();
     Q_INVOKABLE void toggleParticipantStatus(int index);
     Q_INVOKABLE void updateParticipantWeight(const QString &id, double weight);
+    Q_INVOKABLE bool removeParticipant(const QString &id);
     Q_INVOKABLE bool saveCustomWheel(const QString &name, const QVariantList &options);
+    Q_INVOKABLE bool removeCustomWheel(const QString &name);
     Q_INVOKABLE QVariantMap getCustomWheel();
     Q_INVOKABLE void resetDrawnHistory();
     Q_INVOKABLE QVariantList getHistory();
+    Q_INVOKABLE void clearHistory();
     Q_INVOKABLE void clearAllData();
     Q_INVOKABLE QString chooseBackupPath();
     Q_INVOKABLE QString chooseRestorePath();

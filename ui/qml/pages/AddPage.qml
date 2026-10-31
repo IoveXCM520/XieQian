@@ -220,7 +220,7 @@ Item {
                     anchors.left: parent.left
                     anchors.leftMargin: 32
                     anchors.right: parent.right
-                    anchors.rightMargin: 20
+                    anchors.rightMargin: 24
                     anchors.bottom: actionBar.top
                     anchors.bottomMargin: 16
                     contentWidth: width
@@ -229,6 +229,7 @@ Item {
                     boundsBehavior: Flickable.StopAtBounds
 
                     ScrollBar.vertical: ScrollBar {
+                        width: 6
                         policy: formFlick.contentHeight > formFlick.height
                                 ? ScrollBar.AsNeeded
                                 : ScrollBar.AlwaysOff
@@ -236,8 +237,8 @@ Item {
 
                     Column {
                         id: formColumn
-                        // 给右侧滚动条让出 12px，避免右缘文字与删除按钮被遮住
-                        width: Math.max(0, formFlick.width - 12)
+                        // 内容列再收窄 14px，删除按钮与右侧滚动条之间留出空隙
+                        width: Math.max(0, formFlick.width - 14)
                         spacing: 0
 
                         Row {
