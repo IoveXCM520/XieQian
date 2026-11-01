@@ -20,7 +20,9 @@
         <file>qml/pages/ToolsPage.qml</file>
         <file>qml/pages/AboutPage.qml</file>
         <file>qml/pages/SettingsPage.qml</file>
+        <file>qml/pages/DeveloperPage.qml</file>
 
+        <file>qml/components/ExpressionParser.js</file>
         <file>qml/components/WheelItem.qml</file>
         <file>qml/components/ResultCard.qml</file>
         <file>qml/components/WelcomeDialog.qml</file>

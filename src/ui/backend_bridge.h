@@ -3,7 +3,6 @@
 #include <memory>
 #include <vector>
 
-#include <QFutureWatcher>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -26,8 +25,8 @@ class BackendBridge : public QObject
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundEnabledChanged)
     Q_PROPERTY(bool motionEnabled READ motionEnabled WRITE setMotionEnabled NOTIFY motionEnabledChanged)
     Q_PROPERTY(AiManager *aiManager READ aiManager CONSTANT)
-    Q_PROPERTY(bool rosterLoading READ rosterLoading NOTIFY rosterLoadingChanged)
     Q_PROPERTY(QVariantList customWheels READ customWheels NOTIFY customWheelsChanged)
+    Q_PROPERTY(bool dynamicWeights READ dynamicWeights WRITE setDynamicWeights NOTIFY dynamicWeightsChanged)
 
 public:
     enum class DrawMode { Wheel = 0, FlipCard = 1, BlindBox = 2 };
@@ -37,13 +36,13 @@ public:
     Q_INVOKABLE QString drawWinner();
     Q_INVOKABLE QVariantList drawWinners(int count);
     Q_INVOKABLE QVariantList drawMultipleWinners();
-    Q_INVOKABLE QVariantList generateGroups(int groupCount);
-    Q_INVOKABLE QVariantList generateSeats();
     Q_INVOKABLE void applyMockRoster(const QVariantList &roster);
     Q_INVOKABLE void updateDrawSettings(int count, int strategy);
-    Q_INVOKABLE void loadRosterFromFile(const QString &filePath);
-    Q_INVOKABLE void openRosterFileDialog();
-    Q_INVOKABLE void mockImportCsv();
+    Q_INVOKABLE QString chooseRosterFilePath();
+    Q_INVOKABLE QStringList readNamesFromFile(const QString &filePath);
+    Q_INVOKABLE int appendNamesToRoster(const QStringList &names);
+    Q_INVOKABLE int applyScoreWeights(const QVariantList &entries);
+    Q_INVOKABLE void resetDrawStats();
     Q_INVOKABLE QVariantList getParticipantsWithStatus();
     Q_INVOKABLE void toggleParticipantStatus(int index);
     Q_INVOKABLE void updateParticipantWeight(const QString &id, double weight);
@@ -53,7 +52,6 @@ public:
     Q_INVOKABLE QVariantMap getCustomWheel();
     Q_INVOKABLE QString lastSelectedWheel() const;
     Q_INVOKABLE void setLastSelectedWheel(const QString &name);
-    Q_INVOKABLE void resetDrawnHistory();
     Q_INVOKABLE QVariantList getHistory();
     Q_INVOKABLE void clearHistory();
     Q_INVOKABLE void clearAllData();
@@ -62,7 +60,6 @@ public:
     Q_INVOKABLE bool isFirstRun() const;
     Q_INVOKABLE void markFirstRunSeen();
     Q_INVOKABLE QString chooseRosterImagePath();
-    Q_INVOKABLE void importRosterFromNames(const QStringList &names);
     Q_INVOKABLE QString chooseBackupPath();
     Q_INVOKABLE QString chooseRestorePath();
     Q_INVOKABLE void exportData(const QString &filePath);
@@ -84,9 +81,10 @@ public:
 
     AiManager *aiManager() const;
 
-    bool rosterLoading() const;
-
     QVariantList customWheels() const;
+
+    bool dynamicWeights() const;
+    void setDynamicWeights(bool enabled);
 
 signals:
     void rosterUpdated();
@@ -97,8 +95,8 @@ signals:
     void winnersDrawn(const QStringList &names, int mode);
     void soundEnabledChanged();
     void motionEnabledChanged();
-    void rosterLoadingChanged();
     void customWheelsChanged();
+    void dynamicWeightsChanged();
     void aiConfigChanged();
 
 private:
@@ -113,12 +111,12 @@ private:
     };
 
     void recordDraw(const QString &name);
+    void recordWinners(const std::vector<xieqian::core::Participant> &winners);
+    [[nodiscard]] xieqian::core::DrawStrategy effectiveStrategy() const;
     void applyData(const QJsonObject &root);
     [[nodiscard]] QJsonObject stateToJson() const;
     void saveState() const;
     void loadState();
-    void startRosterParse(const QString &filePath, bool removeFileAfterParse);
-    void setRosterLoading(bool loading);
     [[nodiscard]] static QString dataFilePath();
     [[nodiscard]] static QString firstRunFlagPath();
 
@@ -137,6 +135,5 @@ private:
     xieqian::core::DrawStrategy drawStrategy_ = xieqian::core::DrawStrategy::Random;
     bool soundEnabled_ = true;
     bool motionEnabled_ = true;
-    bool rosterLoading_ = false;
-    QFutureWatcher<std::shared_ptr<xieqian::core::Roster>> rosterWatcher_;
+    bool dynamicWeights_ = false;
 };

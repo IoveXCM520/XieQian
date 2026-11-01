@@ -26,7 +26,8 @@ Item {
     property string ocrStatus: ""
     property string importMessage: ""
     property bool importFailed: false
-    property bool fileImportPending: false
+    // 本次导入得到的名字：只追加到选项，是否进名单池由保存后的弹窗决定
+    property var importedNames: []
 
     readonly property int maxOptions: 200
     readonly property int minOptions: 2
@@ -79,6 +80,9 @@ Item {
         page.createdName = ""
         page.createdOptions = []
         page.errorMessage = ""
+        page.importedNames = []
+        page.importMessage = ""
+        page.importFailed = false
         nameField.text = ""
         optionModel.clear()
         optionModel.append({ "text": "" })
@@ -87,6 +91,47 @@ Item {
         Qt.callLater(function() {
             nameField.forceActiveFocus()
         })
+    }
+
+    function appendNamesToOptions(names) {
+        if (names === undefined || names === null)
+            return 0
+
+        var known = []
+        for (var i = 0; i < optionModel.count; ++i) {
+            var value = optionValue(i).trim()
+            if (value.length > 0)
+                known.push(value)
+        }
+
+        var added = 0
+        for (var j = 0; j < names.length; ++j) {
+            var name = String(names[j]).trim()
+            if (name.length === 0 || known.indexOf(name) >= 0)
+                continue
+            if (optionModel.count >= page.maxOptions)
+                break
+
+            // 先填掉空白选项，再追加新行，避免留下一堆空输入框
+            var filled = false
+            for (var k = 0; k < optionModel.count; ++k) {
+                if (optionValue(k).trim().length === 0) {
+                    optionModel.setProperty(k, "text", name)
+                    filled = true
+                    break
+                }
+            }
+            if (!filled)
+                optionModel.append({ "text": name })
+
+            known.push(name)
+            added += 1
+
+            if (page.importedNames.indexOf(name) < 0)
+                page.importedNames = page.importedNames.concat([name])
+        }
+
+        return added
     }
 
     function saveWheel() {
@@ -123,6 +168,9 @@ Item {
         page.generated = true
         page.wheelCreated(name, options)
         successReveal.restart()
+
+        if (page.importedNames.length > 0)
+            rosterDialog.open()
     }
 
     function goDraw() {
@@ -131,18 +179,25 @@ Item {
     }
 
     function importRosterFile() {
-        if (backendBridge.rosterLoading)
+        if (ocrBusy)
             return
-        importMessage = ""
-        importFailed = false
-        fileImportPending = true
-        backendBridge.openRosterFileDialog()
-        if (!backendBridge.rosterLoading)
-            fileImportPending = false
+
+        var path = backendBridge.chooseRosterFilePath()
+        if (!path || path.length === 0)
+            return
+
+        var names = backendBridge.readNamesFromFile(path)
+        importFailed = names.length === 0
+        if (names.length === 0) {
+            importMessage = "没有从文件里读到名字，请检查文件内容"
+            return
+        }
+
+        importMessage = "已导入 " + appendNamesToOptions(names) + " 个名字到选项"
     }
 
     function startImageImport() {
-        if (ocrBusy || backendBridge.rosterLoading)
+        if (ocrBusy)
             return
 
         var path = backendBridge.chooseRosterImagePath()
@@ -165,19 +220,6 @@ Item {
     }
 
     Connections {
-        target: backendBridge
-
-        function onRosterLoadingChanged() {
-            if (backendBridge.rosterLoading || !page.fileImportPending)
-                return
-
-            page.fileImportPending = false
-            page.importFailed = false
-            page.importMessage = "名单已更新，共 " + backendBridge.rosterCount + " 人"
-        }
-    }
-
-    Connections {
         target: backendBridge.aiManager
 
         function onOcrProgress(message) {
@@ -190,11 +232,15 @@ Item {
             page.ocrBusy = false
             page.ocrStatus = ""
             page.importFailed = false
-            backendBridge.importRosterFromNames(names)
-            page.importMessage = "已从图片导入 " + names.length + " 人"
+            var added = page.appendNamesToOptions(names)
+            page.importMessage = added > 0
+                                 ? "已从图片识别 " + added + " 个名字，已追加到选项"
+                                 : "识别到的名字已在选项中"
         }
 
         function onOcrFailed(message) {
+            if (!page.ocrBusy)
+                return
             page.ocrBusy = false
             page.ocrStatus = ""
             page.importFailed = true
@@ -318,7 +364,7 @@ Item {
 
                                 Text {
                                     width: parent.width
-                                    text: "导入 CSV / TXT 名单，或让 AI 识别名单截图；导入后可在名单页查看与编辑"
+                                    text: "导入 CSV / TXT，或让 AI 识别名单截图；识别结果会追加到下面的选项，不会直接改动名单池"
                                     color: Theme.textSecondary
                                     font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontCaption
@@ -331,9 +377,9 @@ Item {
                                     ImportButton {
                                         width: 124
                                         height: 38
-                                        text: backendBridge.rosterLoading ? "正在解析…" : "导入名单"
+                                        text: "导入到选项"
                                         primary: true
-                                        enabled: !backendBridge.rosterLoading && !page.ocrBusy
+                                        enabled: !page.ocrBusy
                                         onClicked: page.importRosterFile()
                                     }
 
@@ -341,7 +387,7 @@ Item {
                                         width: 124
                                         height: 38
                                         text: page.ocrBusy ? "识别中…" : "图片导入"
-                                        enabled: !backendBridge.rosterLoading && !page.ocrBusy
+                                        enabled: !page.ocrBusy
                                         onClicked: page.startImageImport()
                                     }
                                 }
@@ -895,6 +941,151 @@ Item {
                 }
             }
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 保存后询问：导入的名字是否同时进名单池
+    // ─────────────────────────────────────────────────────────────
+    Dialog {
+        id: rosterDialog
+
+        property bool addToRoster: true
+
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        width: 400
+        padding: 24
+
+        background: Rectangle {
+            radius: Theme.radiusCard
+            color: Theme.surface
+
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: Theme.withAlpha(Theme.textPrimary, 0.18)
+                shadowBlur: 0.65
+                shadowVerticalOffset: 12
+                shadowHorizontalOffset: 0
+                autoPaddingEnabled: true
+            }
+        }
+
+        contentItem: Column {
+            width: 352
+            spacing: 14
+
+            Text {
+                width: parent.width
+                text: "转盘「" + page.createdName + "」已保存"
+                color: Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontH2
+                font.weight: Font.DemiBold
+                elide: Text.ElideRight
+            }
+
+            Text {
+                width: parent.width
+                text: "还有 " + page.importedNames.length + " 个导入的名字，要一起放进抽奖名单池吗？"
+                color: Theme.textSecondary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                wrapMode: Text.WordWrap
+                lineHeight: 1.35
+            }
+
+            Rectangle {
+                width: parent.width
+                height: 46
+                radius: 10
+                color: rosterCheckMouse.containsMouse ? Theme.primarySoft : Theme.surfaceAlt
+                border.width: 1
+                border.color: rosterDialog.addToRoster
+                              ? Theme.withAlpha(Theme.primary, 0.32)
+                              : Theme.withAlpha(Theme.textPrimary, 0.05)
+
+                Row {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 10
+
+                    Rectangle {
+                        width: 20
+                        height: 20
+                        radius: 6
+                        color: rosterDialog.addToRoster ? Theme.primary : Theme.surface
+                        border.width: 1
+                        border.color: rosterDialog.addToRoster
+                                      ? Theme.primary
+                                      : Theme.withAlpha(Theme.textPrimary, 0.18)
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: rosterDialog.addToRoster
+                            text: "✓"
+                            color: Theme.white
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 13
+                            font.weight: Font.Bold
+                        }
+                    }
+
+                    Text {
+                        text: "同时将这些名字加入抽奖名单池"
+                        color: Theme.textPrimary
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontBody
+                    }
+                }
+
+                MouseArea {
+                    id: rosterCheckMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: rosterDialog.addToRoster = !rosterDialog.addToRoster
+                }
+            }
+
+            Item {
+                width: parent.width
+                height: 40
+
+                Row {
+                    anchors.right: parent.right
+                    height: parent.height
+                    spacing: 10
+
+                    ImportButton {
+                        width: 92
+                        height: 40
+                        text: "暂不"
+                        onClicked: rosterDialog.reject()
+                    }
+
+                    ImportButton {
+                        width: 104
+                        height: 40
+                        text: "确定"
+                        primary: true
+                        onClicked: rosterDialog.accept()
+                    }
+                }
+            }
+        }
+
+        onOpened: addToRoster = true
+
+        onAccepted: {
+            if (addToRoster)
+                backendBridge.appendNamesToRoster(page.importedNames)
+            page.importedNames = []
+        }
+
+        onRejected: page.importedNames = []
     }
 
     // ─────────────────────────────────────────────────────────────

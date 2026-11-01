@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Effects
+import QtQuick.Window
 
 import ".."
 import "../components"
@@ -15,6 +16,8 @@ Item {
     id: page
 
     property string pendingRestorePath: ""
+    property string developerError: ""
+    readonly property string developerPassword: "LuvXcm080511"
 
     function reloadAIConfig() {
         var config = backendBridge.getAIConfig()
@@ -26,6 +29,28 @@ Item {
 
     function showToast(message) {
         toast.show(message)
+    }
+
+    function openDeveloperConsole() {
+        developerError = ""
+        passwordField.text = ""
+        developerDialog.open()
+        Qt.callLater(function() {
+            passwordField.forceActiveFocus()
+        })
+    }
+
+    function confirmDeveloperPassword() {
+        if (passwordField.text !== developerPassword) {
+            developerError = "密码不对，再想想"
+            passwordField.text = ""
+            passwordField.forceActiveFocus()
+            return
+        }
+
+        developerDialog.close()
+        if (Window.window && typeof Window.window.navigate === "function")
+            Window.window.navigate(7)
     }
 
     Component.onCompleted: reloadAIConfig()
@@ -248,11 +273,12 @@ Item {
 
                                 Text {
                                     width: parent.width
-                                    text: "不填写也会自动使用内置密钥与官方接口，装好即用"
+                                    text: "* 此处的 API 用于高级计算器、函数解析及颁奖词生成。图片导入功能的 AI 识别使用独立内置通道，不消耗您此处的 Key。"
                                     color: Theme.textSecondary
                                     font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontMicro
                                     wrapMode: Text.WordWrap
+                                    lineHeight: 1.3
                                 }
                             }
 
@@ -298,7 +324,7 @@ Item {
                             Text {
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "留空则使用内置密钥"
+                                text: "可留空"
                                 color: Theme.textTertiary
                                 font.family: Theme.fontFamily
                                 font.pixelSize: Theme.fontMicro
@@ -638,9 +664,145 @@ Item {
                     }
                 }
 
+                // 隐藏入口：不显眼的小字，点开后需要输入密码
+                Item {
+                    width: parent.width
+                    height: 36
+
+                    Text {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "开发者选项"
+                        color: Theme.withAlpha(Theme.textTertiary, 0.55)
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 10
+
+                        MouseArea {
+                            anchors.fill: parent
+                            anchors.margins: -6
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: page.openDeveloperConsole()
+                        }
+                    }
+                }
+
                 Item {
                     width: parent.width
                     height: 16
+                }
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 开发者验证
+    // ─────────────────────────────────────────────────────────────
+    Dialog {
+        id: developerDialog
+
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        width: 380
+        padding: 24
+
+        background: Rectangle {
+            radius: Theme.radiusDialog
+            color: Theme.surface
+
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: Theme.withAlpha(Theme.textPrimary, 0.18)
+                shadowBlur: 0.65
+                shadowVerticalOffset: 12
+                shadowHorizontalOffset: 0
+                autoPaddingEnabled: true
+            }
+        }
+
+        contentItem: Column {
+            width: 332
+            spacing: 12
+
+            Text {
+                width: parent.width
+                text: "开发者验证"
+                color: Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontH2
+                font.weight: Font.DemiBold
+            }
+
+            Text {
+                width: parent.width
+                text: "输入密码后进入权重调校控制台。"
+                color: Theme.textSecondary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+            }
+
+            TextField {
+                id: passwordField
+
+                width: parent.width
+                height: 44
+                leftPadding: 14
+                rightPadding: 14
+                placeholderText: "密码"
+                placeholderTextColor: Theme.textTertiary
+                echoMode: TextInput.Password
+                selectByMouse: true
+                color: Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                maximumLength: 64
+
+                background: Rectangle {
+                    radius: Theme.radiusControl
+                    color: passwordField.activeFocus ? Theme.surface : Theme.surfaceAlt
+                    border.width: 1
+                    border.color: passwordField.activeFocus
+                                  ? Theme.primary
+                                  : Theme.withAlpha(Theme.textPrimary, 0.06)
+                }
+
+                onAccepted: page.confirmDeveloperPassword()
+            }
+
+            Text {
+                width: parent.width
+                visible: page.developerError.length > 0
+                text: page.developerError
+                color: Theme.danger
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontCaption
+            }
+
+            Item {
+                width: parent.width
+                height: 40
+
+                Row {
+                    anchors.right: parent.right
+                    height: parent.height
+                    spacing: 10
+
+                    SettingButton {
+                        width: 92
+                        height: 40
+                        text: "取消"
+                        onClicked: developerDialog.close()
+                    }
+
+                    SettingButton {
+                        width: 100
+                        height: 40
+                        text: "进入"
+                        soft: true
+                        onClicked: page.confirmDeveloperPassword()
+                    }
                 }
             }
         }

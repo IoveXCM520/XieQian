@@ -129,6 +129,16 @@ bool DrawEngine::isDrawn(const Participant &participant) const
     return std::find(drawnIds_.begin(), drawnIds_.end(), id) != drawnIds_.end();
 }
 
+void DrawEngine::setDynamicWeights(bool enabled)
+{
+    dynamicWeights_ = enabled;
+}
+
+bool DrawEngine::dynamicWeights() const
+{
+    return dynamicWeights_;
+}
+
 std::vector<Participant> DrawEngine::drawWeighted(const std::vector<Participant> &pool, std::size_t count)
 {
     std::vector<Participant> remaining = pool;
@@ -136,10 +146,15 @@ std::vector<Participant> DrawEngine::drawWeighted(const std::vector<Participant>
     winners.reserve(count);
 
     std::uniform_real_distribution<double> unit(0.0, 1.0);
+    const auto weightOf = [this](const Participant &participant) {
+        return dynamicWeights_ ? dynamicWeight(participant)
+                               : std::max(0.0, participant.weight);
+    };
+
     while (winners.size() < count && !remaining.empty()) {
         double totalWeight = 0.0;
         for (const Participant &participant : remaining) {
-            totalWeight += std::max(0.0, participant.weight);
+            totalWeight += weightOf(participant);
         }
 
         std::size_t picked = remaining.size() - 1;
@@ -149,7 +164,7 @@ std::vector<Participant> DrawEngine::drawWeighted(const std::vector<Participant>
         } else {
             double cursor = unit(rng_) * totalWeight;
             for (std::size_t index = 0; index < remaining.size(); ++index) {
-                const double weight = std::max(0.0, remaining[index].weight);
+                const double weight = weightOf(remaining[index]);
                 if (cursor < weight) {
                     picked = index;
                     break;

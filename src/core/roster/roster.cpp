@@ -1,6 +1,7 @@
 #include "xieqian/core/roster/roster.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iterator>
 #include <utility>
 
@@ -47,6 +48,36 @@ bool Roster::removeAt(std::size_t index)
 std::string participantId(const Participant &participant)
 {
     return participant.studentId.empty() ? participant.name : participant.studentId;
+}
+
+double dynamicWeight(const Participant &participant)
+{
+    const double base = std::max(0.0, participant.weight);
+    const double decay = std::exp(-static_cast<double>(participant.drawCount) / 3.0);
+    const double streakFactor = std::max(0.1, 1.0 - static_cast<double>(participant.streak) * 0.2);
+    return base * decay * streakFactor;
+}
+
+void Roster::recordWins(const std::vector<std::string> &winnerIds)
+{
+    for (Participant &participant : participants_) {
+        const bool won = std::find(winnerIds.begin(), winnerIds.end(), participantId(participant)) !=
+                         winnerIds.end();
+        if (won) {
+            ++participant.drawCount;
+            ++participant.streak;
+        } else {
+            participant.streak = 0;
+        }
+    }
+}
+
+void Roster::resetDrawStats()
+{
+    for (Participant &participant : participants_) {
+        participant.drawCount = 0;
+        participant.streak = 0;
+    }
 }
 
 std::size_t Roster::size() const

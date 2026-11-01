@@ -8,9 +8,8 @@ import "../components"
 
 /*!
     名单管理页。
-    - 重置抽取状态、删除成员
-    - 白色圆角卡片列表，隐藏滚动条
-    - 首字母头像、姓名学号、权重胶囊、状态胶囊
+    - 只保留头像、姓名、启用开关与删除
+    - 姓名按字数插入空格，让纵向列表看起来整齐
 */
 Item {
     id: page
@@ -19,7 +18,6 @@ Item {
     property string removeTargetId: ""
     property string removeTargetName: ""
 
-    readonly property bool loading: backendBridge.rosterLoading
     readonly property int totalCount: backendBridge.rosterCount
 
     function refresh() {
@@ -32,39 +30,15 @@ Item {
         return name.charAt(0)
     }
 
-    function weightLabel(value) {
-        return "x" + Number(value).toFixed(1)
-    }
-
-    function statusText(item) {
-        if (!item.enabled)
-            return "已停用"
-        if (item.isDrawn)
-            return "已抽中"
-        return "可抽取"
-    }
-
-    function statusColor(item) {
-        if (!item.enabled)
-            return Theme.textTertiary
-        if (item.isDrawn)
-            return Theme.primary
-        return Theme.success
-    }
-
-    function statusBackground(item) {
-        if (!item.enabled)
-            return Theme.surfaceAlt
-        if (item.isDrawn)
-            return Theme.primarySoft
-        return Theme.successSoft
-    }
-
-    function openWeightDialog(item) {
-        weightDialog.targetId = item.id
-        weightDialog.targetName = item.name
-        weightField.text = item.weight.toString()
-        weightDialog.open()
+    // 两字名中间补全角空格，三字名在姓与名之间补半角空格
+    function displayName(name) {
+        if (!name || name.length === 0)
+            return ""
+        if (name.length === 2)
+            return name.charAt(0) + "\u3000" + name.charAt(1)
+        if (name.length === 3)
+            return name.charAt(0) + " " + name.substring(1)
+        return name
     }
 
     function requestRemove(item) {
@@ -84,11 +58,6 @@ Item {
 
         function onHistoryUpdated() {
             page.refresh()
-        }
-
-        function onRosterLoadingChanged() {
-            if (!backendBridge.rosterLoading)
-                page.refresh()
         }
     }
 
@@ -164,31 +133,12 @@ Item {
         }
 
         // ─────────────────────────────────────────────────────────
-        // 工具栏
-        // ─────────────────────────────────────────────────────────
-        Row {
-            id: toolbar
-            anchors.top: header.bottom
-            anchors.topMargin: 14
-            anchors.right: parent.right
-            spacing: 10
-
-            RosterButton {
-                width: 124
-                height: 40
-                text: "重置抽取状态"
-                enabled: page.totalCount > 0 && !page.loading
-                onClicked: backendBridge.resetDrawnHistory()
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────
         // 名单列表
         // ─────────────────────────────────────────────────────────
         ListView {
             id: listView
 
-            anchors.top: toolbar.bottom
+            anchors.top: header.bottom
             anchors.topMargin: 16
             anchors.left: parent.left
             anchors.right: parent.right
@@ -216,8 +166,8 @@ Item {
                 border.color: cardMouse.containsMouse
                               ? Theme.withAlpha(Theme.primary, 0.22)
                               : Theme.withAlpha(Theme.textPrimary, 0.045)
-                opacity: !modelData.enabled ? 0.55 : (modelData.isDrawn ? 0.78 : 1.0)
-                scale: cardMouse.pressed ? 0.995 : (cardMouse.containsMouse ? 1.002 : 1.0)
+                opacity: modelData.enabled ? 1.0 : 0.55
+                scale: cardMouse.containsMouse ? 1.002 : 1.0
 
                 Behavior on opacity {
                     NumberAnimation {
@@ -244,8 +194,6 @@ Item {
                     id: cardMouse
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: backendBridge.toggleParticipantStatus(modelData.index)
                 }
 
                 RowLayout {
@@ -278,7 +226,7 @@ Item {
 
                         Text {
                             width: parent.width
-                            text: modelData.name
+                            text: page.displayName(modelData.name)
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontBody
@@ -296,67 +244,14 @@ Item {
                         }
                     }
 
-                    Rectangle {
-                        id: weightPill
+                    RosterSwitch {
                         Layout.alignment: Qt.AlignVCenter
-                        Layout.preferredWidth: 68
-                        Layout.preferredHeight: 28
-                        radius: 14
-                        color: weightMouse.containsMouse
-                               ? Theme.primarySoft
-                               : Theme.surfaceAlt
-                        scale: weightMouse.pressed
-                               ? 0.95
-                               : (weightMouse.containsMouse ? 1.02 : 1.0)
-
-                        Behavior on color {
-                            ColorAnimation {
-                                duration: Theme.durationFast
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-
-                        Behavior on scale {
-                            NumberAnimation {
-                                duration: Theme.durationFast
-                                easing.type: Easing.OutCubic
-                            }
-                        }
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: page.weightLabel(modelData.weight)
-                            color: Theme.primary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: 11
-                            font.weight: Font.DemiBold
-                        }
-
-                        MouseArea {
-                            id: weightMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: page.openWeightDialog(modelData)
-                        }
-                    }
-
-                    Rectangle {
-                        id: statusPill
-                        Layout.alignment: Qt.AlignVCenter
-                        Layout.preferredWidth: statusLabel.implicitWidth + 20
-                        Layout.preferredHeight: 24
-                        radius: 12
-                        color: page.statusBackground(modelData)
-
-                        Text {
-                            id: statusLabel
-                            anchors.centerIn: parent
-                            text: page.statusText(modelData)
-                            color: page.statusColor(modelData)
-                            font.family: Theme.fontFamily
-                            font.pixelSize: 11
-                            font.weight: Font.DemiBold
+                        Layout.preferredWidth: 46
+                        Layout.preferredHeight: 26
+                        checked: modelData.enabled
+                        onToggled: function(value) {
+                            if (value !== modelData.enabled)
+                                backendBridge.toggleParticipantStatus(modelData.index)
                         }
                     }
 
@@ -429,7 +324,7 @@ Item {
                 anchors.centerIn: parent
                 width: Math.min(360, listView.width - 40)
                 height: 150
-                visible: listView.count === 0 && !page.loading
+                visible: listView.count === 0
 
                 Column {
                     width: parent.width
@@ -478,123 +373,6 @@ Item {
                     }
                 }
             }
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // 权重编辑
-    // ─────────────────────────────────────────────────────────────
-    Dialog {
-        id: weightDialog
-
-        property string targetId: ""
-        property string targetName: ""
-
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        width: 380
-        padding: 24
-
-        background: Rectangle {
-            radius: Theme.radiusCard
-            color: Theme.surface
-
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowColor: Theme.withAlpha(Theme.textPrimary, 0.18)
-                shadowBlur: 0.65
-                shadowVerticalOffset: 12
-                shadowHorizontalOffset: 0
-                autoPaddingEnabled: true
-            }
-        }
-
-        contentItem: Column {
-            width: 380 - 48
-            spacing: 14
-
-            Text {
-                width: parent.width
-                text: weightDialog.targetName + " · 中签权重"
-                color: Theme.textPrimary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontH2
-                font.weight: Font.DemiBold
-                elide: Text.ElideRight
-            }
-
-            Text {
-                width: parent.width
-                text: "权重越高，被抽中的概率越大。"
-                color: Theme.textSecondary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontBody
-            }
-
-            TextField {
-                id: weightField
-                width: parent.width
-                height: 44
-                placeholderText: "大于 0 的数字"
-                placeholderTextColor: Theme.textTertiary
-                selectByMouse: true
-                color: Theme.textPrimary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontBody
-                leftPadding: 14
-
-                validator: DoubleValidator {
-                    bottom: 0.1
-                    top: 1000
-                    decimals: 2
-                }
-
-                background: Rectangle {
-                    radius: Theme.radiusControl
-                    color: Theme.surfaceAlt
-                    border.width: 1
-                    border.color: weightField.activeFocus
-                                  ? Theme.primary
-                                  : Theme.withAlpha(Theme.textPrimary, 0.06)
-                }
-
-                onAccepted: weightDialog.accept()
-            }
-
-            Item {
-                width: parent.width
-                height: 40
-
-                Row {
-                    anchors.right: parent.right
-                    height: parent.height
-                    spacing: 10
-
-                    RosterButton {
-                        width: 92
-                        height: 40
-                        text: "取消"
-                        onClicked: weightDialog.reject()
-                    }
-
-                    RosterButton {
-                        width: 100
-                        height: 40
-                        text: "确认"
-                        primary: true
-                        enabled: weightField.acceptableInput
-                                 && weightField.text.length > 0
-                        onClicked: weightDialog.accept()
-                    }
-                }
-            }
-        }
-
-        onAccepted: {
-            backendBridge.updateParticipantWeight(weightDialog.targetId,
-                                                  parseFloat(weightField.text))
         }
     }
 
@@ -676,6 +454,59 @@ Item {
         }
 
         onAccepted: backendBridge.removeParticipant(page.removeTargetId)
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 启用开关
+    // ─────────────────────────────────────────────────────────────
+    component RosterSwitch: Item {
+        id: control
+
+        property bool checked: false
+        signal toggled(bool value)
+
+        width: 46
+        height: 26
+
+        Rectangle {
+            id: track
+            anchors.fill: parent
+            radius: height / 2
+            color: control.checked ? Theme.success : Theme.switchOff
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: Theme.durationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        Rectangle {
+            id: knob
+            y: 2
+            x: control.checked ? control.width - width - 2 : 2
+            width: 22
+            height: 22
+            radius: 11
+            color: Theme.white
+            border.width: 1
+            border.color: Theme.withAlpha(Theme.textPrimary, 0.08)
+
+            Behavior on x {
+                NumberAnimation {
+                    duration: Theme.durationNormal
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: control.toggled(!control.checked)
+        }
     }
 
     // ─────────────────────────────────────────────────────────────

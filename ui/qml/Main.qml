@@ -48,6 +48,9 @@ ApplicationWindow {
     property int pendingPage: 0
     property bool resultOpen: false
 
+    // 抽奖进行中（含结果弹窗未关闭）：左侧导航、顶栏按钮与整页点击均被锁住
+    readonly property bool uiLocked: homePage.isDrawing
+
     function showResult(names) {
         resultCard.open(names)
     }
@@ -58,7 +61,7 @@ ApplicationWindow {
     }
 
     function navigate(page) {
-        var target = Math.max(0, Math.min(6, page))
+        var target = Math.max(0, Math.min(7, page))
         if (target === currentPage && pageStack.currentIndex === target
                 && !pageSwitch.running)
             return
@@ -228,18 +231,21 @@ ApplicationWindow {
 
                 TitleButton {
                     iconKind: 0
+                    enabled: !window.uiLocked
                     onTriggered: window.showMinimized()
                 }
 
                 TitleButton {
                     iconKind: 1
                     restore: window.maximized
+                    enabled: !window.uiLocked
                     onTriggered: window.toggleMaximize()
                 }
 
                 TitleButton {
                     iconKind: 2
                     danger: true
+                    enabled: !window.uiLocked
                     onTriggered: window.close()
                 }
             }
@@ -267,6 +273,7 @@ ApplicationWindow {
                     iconKind: 6
                     label: "主页"
                     selected: window.currentPage === 0
+                    enabled: !window.uiLocked
                     onTriggered: window.navigate(0)
                 }
 
@@ -274,6 +281,7 @@ ApplicationWindow {
                     iconKind: 5
                     label: "添加"
                     selected: window.currentPage === 1
+                    enabled: !window.uiLocked
                     onTriggered: window.navigate(1)
                 }
 
@@ -281,6 +289,7 @@ ApplicationWindow {
                     iconKind: 1
                     label: "名单"
                     selected: window.currentPage === 2
+                    enabled: !window.uiLocked
                     onTriggered: window.navigate(2)
                 }
 
@@ -288,6 +297,7 @@ ApplicationWindow {
                     iconKind: 2
                     label: "历史"
                     selected: window.currentPage === 3
+                    enabled: !window.uiLocked
                     onTriggered: window.navigate(3)
                 }
 
@@ -295,6 +305,7 @@ ApplicationWindow {
                     iconKind: 3
                     label: "工具"
                     selected: window.currentPage === 4
+                    enabled: !window.uiLocked
                     onTriggered: window.navigate(4)
                 }
             }
@@ -309,6 +320,7 @@ ApplicationWindow {
                     iconKind: 4
                     label: "设置"
                     selected: window.currentPage === 6
+                    enabled: !window.uiLocked
                     onTriggered: window.navigate(6)
                 }
 
@@ -316,6 +328,7 @@ ApplicationWindow {
                     iconKind: 7
                     label: "关于"
                     selected: window.currentPage === 5
+                    enabled: !window.uiLocked
                     onTriggered: window.navigate(5)
                 }
             }
@@ -365,6 +378,23 @@ ApplicationWindow {
                     ToolsPage {}
                     AboutPage {}
                     SettingsPage {}
+
+                    // 开发者控制台：只从设置页的隐藏入口进入，不占导航位
+                    DeveloperPage {}
+                }
+            }
+
+            // 抽奖期间整页拦截点击，避免连点穿帮
+            Item {
+                anchors.fill: parent
+                z: 60
+                visible: window.uiLocked
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.AllButtons
+                    hoverEnabled: true
+                    onWheel: function(wheel) { wheel.accepted = true }
                 }
             }
         }
@@ -517,10 +547,14 @@ ApplicationWindow {
 
         onOpenedChanged: window.resultOpen = opened
 
-        onCloseRequested: homePage.lastWinners = []
+        onCloseRequested: {
+            homePage.lastWinners = []
+            homePage.endDrawLock()
+        }
 
         onContinueRequested: {
             homePage.lastWinners = []
+            homePage.endDrawLock()
             homePage.startDraw()
         }
     }
@@ -1002,6 +1036,15 @@ ApplicationWindow {
         property string label: ""
         signal triggered()
 
+        opacity: enabled ? 1.0 : 0.42
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
         Rectangle {
             id: navHalo
             width: 58
@@ -1119,6 +1162,15 @@ ApplicationWindow {
         property bool restore: false
         property bool danger: false
         signal triggered()
+
+        opacity: enabled ? 1.0 : 0.4
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
 
         Rectangle {
             id: controlBackground

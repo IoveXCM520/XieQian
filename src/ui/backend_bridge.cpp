@@ -18,9 +18,7 @@
 #include <QJsonValue>
 #include <QSettings>
 #include <QStandardPaths>
-#include <QTemporaryFile>
 #include <QVariantMap>
-#include <QtConcurrentRun>
 
 #include "xieqian/core/io/file_parser.h"
 
@@ -55,21 +53,6 @@ bool writeJsonFile(const QString &path, const QJsonObject &state)
     return file.write(QJsonDocument(state).toJson(QJsonDocument::Indented)) >= 0;
 }
 
-QString mockCsvContent()
-{
-    return QStringLiteral("姓名,学号,分组\n"
-                          "苏婉宁,2023001,一组\n"
-                          "林砚舟,2023002,一组\n"
-                          "顾南乔,2023003,二组\n"
-                          "白清让,2023004,二组\n"
-                          "沈亦初,2023005,三组\n"
-                          "温言澈,2023006,三组\n"
-                          "陆时衍,2023007,四组\n"
-                          "许南枝,2023008,四组\n"
-                          "程砚秋,2023009,五组\n"
-                          "江晚吟,2023010,五组\n");
-}
-
 }  // namespace
 
 BackendBridge::BackendBridge(QObject *parent)
@@ -78,20 +61,6 @@ BackendBridge::BackendBridge(QObject *parent)
       drawEngine_(std::make_unique<xieqian::core::DrawEngine>(seededGenerator())),
       aiManager_(std::make_unique<AiManager>())
 {
-    connect(&rosterWatcher_,
-            &QFutureWatcher<std::shared_ptr<xieqian::core::Roster>>::finished, this, [this]() {
-                const std::shared_ptr<xieqian::core::Roster> parsed = rosterWatcher_.result();
-                if (parsed != nullptr) {
-                    roster_ = parsed;
-                    drawEngine_->clearDrawnHistory();
-                    saveState();
-                    emit rosterUpdated();
-                } else {
-                    qWarning() << "cannot parse roster CSV";
-                }
-                setRosterLoading(false);
-            });
-
     loadState();
     aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_, aiModel_);
 }
@@ -136,11 +105,12 @@ void BackendBridge::loadState()
 QString BackendBridge::drawWinner()
 {
     const std::vector<xieqian::core::Participant> winners =
-        drawEngine_->draw(roster_->enabledParticipants(), 1, drawStrategy_);
+        drawEngine_->draw(roster_->enabledParticipants(), 1, effectiveStrategy());
     if (winners.empty()) {
         return QStringLiteral("无可用名单");
     }
 
+    recordWinners(winners);
     const QString name = QString::fromStdString(winners.front().name);
     recordDraw(name);
     emit winnerDrawn(name, static_cast<int>(currentDrawMode_));
@@ -154,8 +124,10 @@ QVariantList BackendBridge::drawWinners(int count)
         return winners;
     }
 
-    for (const xieqian::core::Participant &participant :
-         drawEngine_->draw(roster_->enabledParticipants(), count, drawStrategy_)) {
+    const std::vector<xieqian::core::Participant> picked =
+        drawEngine_->draw(roster_->enabledParticipants(), count, effectiveStrategy());
+    recordWinners(picked);
+    for (const xieqian::core::Participant &participant : picked) {
         const QString winner = QString::fromStdString(participant.name);
         recordDraw(winner);
         winners.append(winner);
@@ -168,8 +140,10 @@ QVariantList BackendBridge::drawMultipleWinners()
     QVariantList winners;
     QStringList names;
 
-    for (const xieqian::core::Participant &participant :
-         drawEngine_->draw(roster_->enabledParticipants(), drawCount_, drawStrategy_)) {
+    const std::vector<xieqian::core::Participant> picked =
+        drawEngine_->draw(roster_->enabledParticipants(), drawCount_, effectiveStrategy());
+    recordWinners(picked);
+    for (const xieqian::core::Participant &participant : picked) {
         const QString name = QString::fromStdString(participant.name);
         recordDraw(name);
         names.append(name);
@@ -180,34 +154,6 @@ QVariantList BackendBridge::drawMultipleWinners()
         emit winnersDrawn(names, static_cast<int>(currentDrawMode_));
     }
     return winners;
-}
-
-QVariantList BackendBridge::generateGroups(int groupCount)
-{
-    QVariantList groups;
-    if (groupCount <= 0) {
-        return groups;
-    }
-
-    for (const std::vector<xieqian::core::Participant> &group :
-         drawEngine_->randomGroup(roster_->enabledParticipants(), groupCount)) {
-        QVariantList members;
-        for (const xieqian::core::Participant &participant : group) {
-            members.append(QString::fromStdString(participant.name));
-        }
-        groups.append(members);
-    }
-    return groups;
-}
-
-QVariantList BackendBridge::generateSeats()
-{
-    QVariantList seats;
-    for (const xieqian::core::Participant &participant :
-         drawEngine_->randomSeat(roster_->enabledParticipants())) {
-        seats.append(QString::fromStdString(participant.name));
-    }
-    return seats;
 }
 
 void BackendBridge::applyMockRoster(const QVariantList &roster)
@@ -254,26 +200,34 @@ void BackendBridge::updateDrawSettings(int count, int strategy)
     emit drawSettingsChanged();
 }
 
-void BackendBridge::loadRosterFromFile(const QString &filePath)
+QString BackendBridge::chooseRosterFilePath()
 {
-    startRosterParse(filePath, false);
-}
-
-void BackendBridge::openRosterFileDialog()
-{
-    if (rosterLoading_) {
-        return;
-    }
-
-    const QString filePath = QFileDialog::getOpenFileName(
+    return QFileDialog::getOpenFileName(
         nullptr, QStringLiteral("选择名单文件"), QString(),
         QStringLiteral("名单文件 (*.csv *.txt);;CSV 文件 (*.csv);;文本文件 (*.txt)"));
+}
+
+QStringList BackendBridge::readNamesFromFile(const QString &filePath)
+{
+    QStringList names;
     if (filePath.isEmpty()) {
-        return;
+        return names;
     }
 
-    // 解析在后台线程完成，结束后由 rosterUpdated 通知界面刷新
-    startRosterParse(filePath, false);
+    xieqian::core::Roster parsed;
+    xieqian::core::FileParser parser;
+    if (!parser.parseFile(QFile::encodeName(filePath).toStdString(), parsed)) {
+        qWarning() << "cannot parse roster file:" << filePath;
+        return names;
+    }
+
+    for (std::size_t index = 0; index < parsed.size(); ++index) {
+        const QString name = QString::fromStdString(parsed.at(index).name).trimmed();
+        if (!name.isEmpty() && !names.contains(name)) {
+            names.append(name);
+        }
+    }
+    return names;
 }
 
 QString BackendBridge::chooseRosterImagePath()
@@ -282,72 +236,89 @@ QString BackendBridge::chooseRosterImagePath()
                                         QStringLiteral("图片文件 (*.png *.jpg *.jpeg)"));
 }
 
-void BackendBridge::importRosterFromNames(const QStringList &names)
+int BackendBridge::appendNamesToRoster(const QStringList &names)
 {
-    roster_->clear();
+    int added = 0;
     for (const QString &raw : names) {
         const QString name = raw.trimmed();
         if (name.isEmpty()) {
             continue;
         }
 
+        // 名单内按姓名去重：同一个名字重复参与只会让权重失真
+        bool exists = false;
+        for (std::size_t index = 0; index < roster_->size(); ++index) {
+            if (QString::fromStdString(roster_->at(index).name) == name) {
+                exists = true;
+                break;
+            }
+        }
+        if (exists) {
+            continue;
+        }
+
         xieqian::core::Participant participant;
         participant.name = name.toStdString();
         roster_->add(std::move(participant));
+        ++added;
     }
 
-    drawEngine_->clearDrawnHistory();
-    saveState();
-    emit rosterUpdated();
+    if (added > 0) {
+        saveState();
+        emit rosterUpdated();
+    }
+    return added;
 }
 
-void BackendBridge::mockImportCsv()
+int BackendBridge::applyScoreWeights(const QVariantList &entries)
 {
-    if (rosterLoading_) {
-        return;
-    }
+    struct ScoreEntry {
+        QString name;
+        double score = 0.0;
+    };
 
-    QTemporaryFile file(QDir::tempPath() + QStringLiteral("/xieqian-roster-XXXXXX.csv"));
-    if (!file.open()) {
-        return;
-    }
-
-    // 临时文件由后台解析任务在完成后删除
-    file.setAutoRemove(false);
-    file.write(mockCsvContent().toUtf8());
-    file.close();
-
-    startRosterParse(file.fileName(), true);
-}
-
-void BackendBridge::startRosterParse(const QString &filePath, bool removeFileAfterParse)
-{
-    if (filePath.isEmpty() || rosterLoading_) {
-        return;
-    }
-
-    setRosterLoading(true);
-
-    const QString path = filePath;
-    rosterWatcher_.setFuture(QtConcurrent::run([path, removeFileAfterParse]() -> std::shared_ptr<xieqian::core::Roster> {
-        auto parsed = std::make_shared<xieqian::core::Roster>();
-        xieqian::core::FileParser parser;
-        const bool ok = parser.parseFile(QFile::encodeName(path).toStdString(), *parsed);
-        if (removeFileAfterParse) {
-            QFile::remove(path);
+    std::vector<ScoreEntry> scored;
+    for (const QVariant &value : entries) {
+        const QVariantMap entry = value.toMap();
+        const QString name = entry.value(QStringLiteral("name")).toString().trimmed();
+        const double score = entry.value(QStringLiteral("score")).toDouble();
+        if (name.isEmpty() || !std::isfinite(score)) {
+            continue;
         }
-        return ok ? parsed : nullptr;
-    }));
-}
-
-void BackendBridge::setRosterLoading(bool loading)
-{
-    if (rosterLoading_ == loading) {
-        return;
+        scored.push_back(ScoreEntry{name, score});
     }
 
-    rosterLoading_ = loading;
-    emit rosterLoadingChanged();
+    if (scored.empty()) {
+        return 0;
+    }
+
+    std::sort(scored.begin(), scored.end(), [](const ScoreEntry &left, const ScoreEntry &right) {
+        return left.score > right.score;
+    });
+
+    int updated = 0;
+    for (std::size_t rank = 0; rank < scored.size(); ++rank) {
+        // 按名次线性分配：最高分 5.0，最低分 0.5；只有一人时直接给满权重
+        const double ratio = scored.size() > 1
+                                 ? static_cast<double>(rank) /
+                                       static_cast<double>(scored.size() - 1)
+                                 : 0.0;
+        const double weight = 5.0 - 4.5 * ratio;
+
+        for (std::size_t index = 0; index < roster_->size(); ++index) {
+            if (QString::fromStdString(roster_->at(index).name) == scored[rank].name) {
+                roster_->setWeight(index, weight);
+                ++updated;
+                break;
+            }
+        }
+    }
+
+    if (updated > 0) {
+        saveState();
+        emit rosterUpdated();
+    }
+    return updated;
 }
 
 QVariantList BackendBridge::getParticipantsWithStatus()
@@ -365,6 +336,8 @@ QVariantList BackendBridge::getParticipantsWithStatus()
         entry.insert(QStringLiteral("group"), QString::fromStdString(participant.group));
         entry.insert(QStringLiteral("enabled"), participant.enabled);
         entry.insert(QStringLiteral("weight"), participant.weight);
+        entry.insert(QStringLiteral("drawCount"), participant.drawCount);
+        entry.insert(QStringLiteral("streak"), participant.streak);
         entry.insert(QStringLiteral("isDrawn"), drawEngine_->isDrawn(participant));
         participants.append(entry);
     }
@@ -511,10 +484,52 @@ QVariantList BackendBridge::customWheels() const
     return wheels;
 }
 
-void BackendBridge::resetDrawnHistory()
+void BackendBridge::resetDrawStats()
 {
     drawEngine_->clearDrawnHistory();
+    roster_->resetDrawStats();
+    saveState();
     emit rosterUpdated();
+}
+
+void BackendBridge::recordWinners(const std::vector<xieqian::core::Participant> &winners)
+{
+    if (winners.empty() || !dynamicWeights_) {
+        return;
+    }
+
+    std::vector<std::string> ids;
+    ids.reserve(winners.size());
+    for (const xieqian::core::Participant &winner : winners) {
+        ids.push_back(xieqian::core::participantId(winner));
+    }
+
+    roster_->recordWins(ids);
+    saveState();
+    emit rosterUpdated();
+}
+
+xieqian::core::DrawStrategy BackendBridge::effectiveStrategy() const
+{
+    // 动态权重只在加权抽签下有意义，开启后自动接管抽签策略
+    return dynamicWeights_ ? xieqian::core::DrawStrategy::Weighted : drawStrategy_;
+}
+
+bool BackendBridge::dynamicWeights() const
+{
+    return dynamicWeights_;
+}
+
+void BackendBridge::setDynamicWeights(bool enabled)
+{
+    if (dynamicWeights_ == enabled) {
+        return;
+    }
+
+    dynamicWeights_ = enabled;
+    drawEngine_->setDynamicWeights(enabled);
+    saveState();
+    emit dynamicWeightsChanged();
 }
 
 QVariantList BackendBridge::getHistory()
@@ -671,11 +686,6 @@ AiManager *BackendBridge::aiManager() const
     return aiManager_.get();
 }
 
-bool BackendBridge::rosterLoading() const
-{
-    return rosterLoading_;
-}
-
 void BackendBridge::setMotionEnabled(bool enabled)
 {
     if (motionEnabled_ == enabled) {
@@ -735,6 +745,8 @@ QJsonObject BackendBridge::stateToJson() const
         entry.insert(QStringLiteral("group"), QString::fromStdString(participant.group));
         entry.insert(QStringLiteral("enabled"), participant.enabled);
         entry.insert(QStringLiteral("weight"), participant.weight);
+        entry.insert(QStringLiteral("drawCount"), participant.drawCount);
+        entry.insert(QStringLiteral("streak"), participant.streak);
         roster.append(entry);
     }
 
@@ -768,6 +780,7 @@ QJsonObject BackendBridge::stateToJson() const
     root.insert(QStringLiteral("aiConfig"), aiConfig);
     root.insert(QStringLiteral("soundEnabled"), soundEnabled_);
     root.insert(QStringLiteral("motionEnabled"), motionEnabled_);
+    root.insert(QStringLiteral("dynamicWeights"), dynamicWeights_);
     return root;
 }
 
@@ -783,6 +796,8 @@ void BackendBridge::applyData(const QJsonObject &root)
         participant.group = entry.value(QStringLiteral("group")).toString().toStdString();
         participant.enabled = entry.value(QStringLiteral("enabled")).toBool(true);
         participant.weight = entry.value(QStringLiteral("weight")).toDouble(1.0);
+        participant.drawCount = entry.value(QStringLiteral("drawCount")).toInt(0);
+        participant.streak = entry.value(QStringLiteral("streak")).toInt(0);
 
         if (!participant.name.empty()) {
             roster_->add(std::move(participant));
@@ -848,6 +863,8 @@ void BackendBridge::applyData(const QJsonObject &root)
 
     soundEnabled_ = root.value(QStringLiteral("soundEnabled")).toBool(true);
     motionEnabled_ = root.value(QStringLiteral("motionEnabled")).toBool(true);
+    dynamicWeights_ = root.value(QStringLiteral("dynamicWeights")).toBool(false);
+    drawEngine_->setDynamicWeights(dynamicWeights_);
     drawEngine_->clearDrawnHistory();
 }
 

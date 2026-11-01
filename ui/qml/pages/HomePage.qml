@@ -54,6 +54,9 @@ Item {
                                         : rosterOptions
 
     property bool busy: false
+    // 抽奖全程锁：点击开始到结果弹窗关闭之间为 true，供 Main 禁用导航与重复点击
+    property bool drawLock: false
+    readonly property bool isDrawing: drawLock
     // 抽取结果由 startDraw() 同步获取，期间忽略后端信号，避免动画未开始就弹出结果
     property bool capturingWinners: false
     property var lastWinners: []
@@ -130,6 +133,7 @@ Item {
             return
 
         busy = true
+        drawLock = true
         lastWinners = []
         pendingWinners = []
         pendingIndex = -1
@@ -137,6 +141,7 @@ Item {
         if (customWheel) {
             if (wheelOptions.length === 0) {
                 busy = false
+                drawLock = false
                 return
             }
 
@@ -156,6 +161,7 @@ Item {
 
             if (winners.length === 0) {
                 busy = false
+                drawLock = false
                 return
             }
 
@@ -216,8 +222,15 @@ Item {
         safetyTimer.stop()
 
         if (lastWinners.length > 0 && Window.window
-                && typeof Window.window.showResult === "function")
+                && typeof Window.window.showResult === "function") {
             Window.window.showResult(lastWinners)
+        } else {
+            drawLock = false
+        }
+    }
+
+    function endDrawLock() {
+        drawLock = false
     }
 
     function goToImport() {
@@ -229,6 +242,7 @@ Item {
     onIsEmptyChanged: {
         if (isEmpty) {
             busy = false
+            drawLock = false
             lastWinners = []
             pendingWinners = []
             if (safetyTimer)
@@ -656,7 +670,7 @@ Item {
     Shortcut {
         sequence: "Space"
         context: Qt.WindowShortcut
-        enabled: page.visible && !page.busy && !page.isEmpty
+        enabled: page.visible && !page.isDrawing && !page.isEmpty
                  && !(Window.window && Window.window.resultOpen)
         onActivated: page.startDraw()
     }

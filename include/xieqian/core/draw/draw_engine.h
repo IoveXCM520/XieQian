@@ -38,11 +38,16 @@ public:
 
     [[nodiscard]] bool isDrawn(const Participant &participant) const;
 
+    // 动态权重模式：按 drawCount / streak 衰减权重；关闭时使用 participant.weight。
+    void setDynamicWeights(bool enabled);
+    [[nodiscard]] bool dynamicWeights() const;
+
 private:
     [[nodiscard]] std::vector<Participant> drawWeighted(const std::vector<Participant> &pool, std::size_t count);
 
     std::mt19937_64 rng_;
     std::vector<std::string> drawnIds_;
+    bool dynamicWeights_ = false;
 };
 
 }  // namespace xieqian::core

@@ -1,315 +1,205 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 
 import ".."
-import "../components"
 
 /*!
     关于页。
-    - 单张大圆角白卡：上半部分居中放图标与版本号
-    - 下半部分克制地展示作者、联系方式、语录与诗句
+    - 白底海报：卡片铺满整个右侧内容区，不再有页头
+    - 大面积留白，Logo、作者与诗句居中排布
 */
 Item {
     id: page
 
-    Item {
-        id: pageContent
-        anchors.fill: parent
-        anchors.margins: Theme.pagePadding
+    Rectangle {
+        id: poster
 
-        Item {
-            id: header
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: 64
+        anchors.fill: parent
+        radius: 0
+        color: Theme.surface
+        clip: true
+
+        Canvas {
+            anchors.fill: parent
+            opacity: 0.9
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            Component.onCompleted: requestPaint()
+
+            onPaint: {
+                if (width <= 0 || height <= 0)
+                    return
+
+                var ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+
+                var glow = ctx.createRadialGradient(width * 0.5, height * 0.3,
+                                                    0, width * 0.5, height * 0.3,
+                                                    Math.max(width, height) * 0.62)
+                glow.addColorStop(0, "rgba(59,139,246,0.05)")
+                glow.addColorStop(0.55, "rgba(46,212,165,0.018)")
+                glow.addColorStop(1, "rgba(59,139,246,0)")
+                ctx.fillStyle = glow
+                ctx.fillRect(0, 0, width, height)
+            }
+        }
+
+        Flickable {
+            id: posterFlick
+
+            anchors.fill: parent
+            clip: true
+            contentWidth: width
+            contentHeight: Math.max(posterFlick.height, posterColumn.height + 120)
+            boundsBehavior: Flickable.StopAtBounds
+
+            ScrollBar.vertical: ScrollBar {
+                policy: ScrollBar.AlwaysOff
+            }
 
             Column {
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 4
+                id: posterColumn
+
+                width: Math.min(560, posterFlick.width - 96)
+                x: (posterFlick.width - width) / 2
+                y: Math.max(48, (posterFlick.height - height) / 2)
+                spacing: 0
+
+                Item {
+                    width: parent.width
+                    height: 132
+
+                    Image {
+                        anchors.centerIn: parent
+                        width: 128
+                        height: 128
+                        source: "qrc:/ui/assets/app-icon-512.png"
+                        sourceSize.width: 512
+                        sourceSize.height: 512
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        mipmap: true
+                    }
+                }
+
+                Item { width: 1; height: 26 }
 
                 Text {
-                    text: "关于"
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "撷签"
                     color: Theme.textPrimary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontH0
+                    font.pixelSize: 34
                     font.weight: Font.Bold
+                    font.letterSpacing: 6
                 }
+
+                Item { width: 1; height: 8 }
 
                 Text {
-                    text: "面向教育场景的离线抽奖系统"
-                    color: Theme.textSecondary
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "XIE QIAN"
+                    color: Theme.textTertiary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontBody
-                }
-            }
-        }
-
-        CardShadowBehind {
-            target: card
-        }
-
-        Rectangle {
-            id: card
-
-            anchors.top: header.bottom
-            anchors.topMargin: 16
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            radius: Theme.radiusCard
-            color: Theme.surface
-            border.width: 1
-            border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
-            clip: true
-
-            Canvas {
-                anchors.fill: parent
-                opacity: 0.9
-                onWidthChanged: requestPaint()
-                onHeightChanged: requestPaint()
-                Component.onCompleted: requestPaint()
-
-                onPaint: {
-                    if (width <= 0 || height <= 0)
-                        return
-
-                    var ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-
-                    var glow = ctx.createRadialGradient(width * 0.5, height * 0.14,
-                                                        0, width * 0.5, height * 0.14,
-                                                        Math.max(width, height) * 0.55)
-                    glow.addColorStop(0, "rgba(59,139,246,0.055)")
-                    glow.addColorStop(0.55, "rgba(46,212,165,0.02)")
-                    glow.addColorStop(1, "rgba(59,139,246,0)")
-                    ctx.fillStyle = glow
-                    ctx.fillRect(0, 0, width, height)
-                }
-            }
-
-            Flickable {
-                id: aboutFlick
-
-                anchors.fill: parent
-                clip: true
-                contentWidth: width
-                contentHeight: aboutColumn.height + 96
-                boundsBehavior: Flickable.StopAtBounds
-
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AlwaysOff
+                    font.pixelSize: 10
+                    font.letterSpacing: 6
                 }
 
-                Column {
-                    id: aboutColumn
+                Item { width: 1; height: 20 }
 
-                    width: Math.min(520, card.width - 96)
-                    x: (aboutFlick.width - width) / 2
-                    y: 48
-                    spacing: 0
-
-                    // ── 品牌区 ──
-                    Item {
-                        width: parent.width
-                        height: 96
-
-                        Image {
-                            anchors.centerIn: parent
-                            width: 96
-                            height: 96
-                            source: "qrc:/ui/assets/app-icon-512.png"
-                            sourceSize.width: 512
-                            sourceSize.height: 512
-                            fillMode: Image.PreserveAspectFit
-                            smooth: true
-                            mipmap: true
-                        }
-                    }
-
-                    Item { width: 1; height: 20 }
+                Rectangle {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: versionText.implicitWidth + 28
+                    height: 28
+                    radius: 14
+                    color: Theme.surfaceAlt
+                    border.width: 1
+                    border.color: Theme.withAlpha(Theme.textPrimary, 0.05)
 
                     Text {
-                        width: parent.width
-                        horizontalAlignment: Text.AlignHCenter
-                        text: "撷签"
-                        color: Theme.textPrimary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: 30
-                        font.weight: Font.Bold
-                        font.letterSpacing: 4
-                    }
-
-                    Item { width: 1; height: 6 }
-
-                    Text {
-                        width: parent.width
-                        horizontalAlignment: Text.AlignHCenter
-                        text: "XIE QIAN"
-                        color: Theme.textTertiary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: 10
-                        font.letterSpacing: 5
-                    }
-
-                    Item { width: 1; height: 18 }
-
-                    Rectangle {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        width: versionText.implicitWidth + 26
-                        height: 28
-                        radius: 14
-                        color: Theme.surfaceAlt
-                        border.width: 1
-                        border.color: Theme.withAlpha(Theme.textPrimary, 0.05)
-
-                        Text {
-                            id: versionText
-                            anchors.centerIn: parent
-                            text: "v1.0.8.5"
-                            color: Theme.textSecondary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontMicro
-                            font.letterSpacing: 1
-                        }
-                    }
-
-                    Item { width: 1; height: 14 }
-
-                    Text {
-                        width: parent.width
-                        horizontalAlignment: Text.AlignHCenter
-                        text: "妙择一签，落定心安"
-                        color: Theme.primary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontBody
-                        font.letterSpacing: 2
-                    }
-
-                    Item { width: 1; height: 30 }
-
-                    Rectangle {
-                        width: parent.width
-                        height: 1
-                        color: Theme.withAlpha(Theme.textPrimary, 0.06)
-                    }
-
-                    Item { width: 1; height: 26 }
-
-                    // ── 信息区 ──
-                    RowLayout {
-                        width: parent.width
-                        spacing: 16
-
-                        Text {
-                            Layout.preferredWidth: 64
-                            Layout.alignment: Qt.AlignVCenter
-                            text: "作者"
-                            color: Theme.textTertiary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontCaption
-                            font.letterSpacing: 2
-                        }
-
-                        Text {
-                            Layout.alignment: Qt.AlignVCenter
-                            text: "汐辞梦"
-                            color: Theme.textPrimary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontH2
-                            font.weight: Font.DemiBold
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    Item { width: 1; height: 16 }
-
-                    RowLayout {
-                        width: parent.width
-                        spacing: 16
-
-                        Text {
-                            Layout.preferredWidth: 64
-                            Layout.alignment: Qt.AlignVCenter
-                            text: "QQ"
-                            color: Theme.textTertiary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontCaption
-                            font.letterSpacing: 2
-                        }
-
-                        Text {
-                            Layout.alignment: Qt.AlignVCenter
-                            text: "2995723028"
-                            color: Theme.textPrimary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontBody
-                            font.letterSpacing: 1
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    Item { width: 1; height: 22 }
-
-                    // ── 语录与诗句 ──
-                    Text {
-                        width: 64
-                        text: "语录"
-                        color: Theme.textTertiary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontCaption
-                        font.letterSpacing: 2
-                    }
-
-                    Item { width: 1; height: 8 }
-
-                    Text {
-                        width: parent.width
-                        text: "Misty Arcane Dreamy Ethereal Radiant Omen Xenon Cipher Muse"
+                        id: versionText
+                        anchors.centerIn: parent
+                        text: "v1.0.9"
                         color: Theme.textSecondary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontBody
-                        font.letterSpacing: 0.6
-                        wrapMode: Text.WordWrap
-                        lineHeight: 1.4
-                    }
-
-                    Item { width: 1; height: 20 }
-
-                    Text {
-                        width: parent.width
-                        text: "「远潮藏诗，魅影托梦」"
-                        color: Theme.primary
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontH2
-                        font.letterSpacing: 2
-                    }
-
-                    Item { width: 1; height: 30 }
-
-                    Rectangle {
-                        width: parent.width
-                        height: 1
-                        color: Theme.withAlpha(Theme.textPrimary, 0.06)
-                    }
-
-                    Item { width: 1; height: 16 }
-
-                    Text {
-                        width: parent.width
-                        horizontalAlignment: Text.AlignHCenter
-                        text: "MIT License · 2026"
-                        color: Theme.textTertiary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontMicro
                         font.letterSpacing: 1
                     }
+                }
 
-                    Item { width: 1; height: 32 }
+                Item { width: 1; height: 64 }
+
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "作者"
+                    color: Theme.textTertiary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
+                    font.letterSpacing: 4
+                }
+
+                Item { width: 1; height: 10 }
+
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "汐辞梦"
+                    color: Theme.textPrimary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 24
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 4
+                }
+
+                Item { width: 1; height: 8 }
+
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "QQ 2995723028"
+                    color: Theme.textTertiary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontMicro
+                    font.letterSpacing: 1
+                }
+
+                Item { width: 1; height: 56 }
+
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "「远潮藏诗，魅影托梦」"
+                    color: Theme.primary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 22
+                    font.letterSpacing: 3
+                }
+
+                Item { width: 1; height: 14 }
+
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "妙择一签，落定心安"
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontBody
+                    font.letterSpacing: 3
+                }
+
+                Item { width: 1; height: 72 }
+
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "MIT License · 2026"
+                    color: Theme.withAlpha(Theme.textTertiary, 0.8)
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 10
+                    font.letterSpacing: 1
                 }
             }
         }

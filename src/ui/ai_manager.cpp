@@ -62,6 +62,25 @@ QString verificationPrompt(const QString &category)
         .arg(category);
 }
 
+QString scoresPrompt()
+{
+    return QStringLiteral("请识别这张成绩单或成绩表格图片，提取所有学生的姓名与对应分数。"
+                          "严格按 JSON 数组返回：[{\"name\":\"张三\",\"score\":95}]，"
+                          "分数只写数字，不要带单位，不要包含其他任何文字");
+}
+
+QString functionPrompt(const QString &description)
+{
+    return QStringLiteral("你是数学绘图助手。用户想画：%1。请返回可以直接绘制的函数表达式，"
+                          "严格遵守："
+                          "1. 只输出表达式本身，不要解释，不要 Markdown 代码块；"
+                          "2. 直角坐标写成 y = ...（变量用 x）；"
+                          "3. 参数方程写成 x = ... , y = ...（变量用 t）；"
+                          "4. 隐式方程写成 F(x, y) = G(x, y)；"
+                          "5. 只使用 x y t 这几个变量，支持 sin cos tan log ln sqrt abs exp 与 ^ 乘方。")
+        .arg(description);
+}
+
 // 模型常把类别写成“类别：姓名”“姓名（Name）”或带引号，取第一个有效词作为类别
 QString cleanCategory(const QString &content)
 {
@@ -271,6 +290,17 @@ void AiManager::generateAwardSpeech(const QString &winnerName)
         RequestKind::AwardSpeech);
 }
 
+void AiManager::generateFunction(const QString &prompt)
+{
+    const QString description = prompt.trimmed();
+    if (description.isEmpty()) {
+        emit functionFailed(QStringLiteral("先描述一下想画的图形"));
+        return;
+    }
+
+    requestCompletion(functionPrompt(description), RequestKind::FunctionExpression);
+}
+
 void AiManager::requestCompletion(const QString &prompt, RequestKind kind)
 {
     const QString key = effectiveApiKey();
@@ -301,6 +331,9 @@ void AiManager::requestCompletion(const QString &prompt, RequestKind kind)
     postChat(payload, key, endpoint, kRequestTimeoutMs,
              [this, kind](bool ok, const QString &content, const QString &error) {
                  if (!ok) {
+                     if (kind == RequestKind::FunctionExpression) {
+                         emit functionFailed(error);
+                     }
                      emit networkError(error);
                      return;
                  }
@@ -312,6 +345,16 @@ void AiManager::requestCompletion(const QString &prompt, RequestKind kind)
                          return;
                      }
                      emit mockRosterReady(roster);
+                     return;
+                 }
+
+                 if (kind == RequestKind::FunctionExpression) {
+                     const QString expression = cleanExpression(content);
+                     if (expression.isEmpty()) {
+                         emit functionFailed(QStringLiteral("AI 返回的表达式无法解析"));
+                         return;
+                     }
+                     emit functionGenerated(expression);
                      return;
                  }
 
@@ -364,26 +407,21 @@ void AiManager::postOcrChat(const QString &prompt, int timeoutMs, ChatHandler ha
              std::move(handler));
 }
 
-void AiManager::ocrFromImage(const QString &filePath)
+bool AiManager::prepareOcrImage(const QString &filePath)
 {
     ocrImageUrl_.clear();
-    ocrCategory_.clear();
-    ocrFirstPass_.clear();
-    ocrSecondPass_.clear();
 
     QFile file(filePath);
     if (filePath.isEmpty() || !file.open(QIODevice::ReadOnly)) {
         qWarning() << "cannot open image for OCR:" << filePath;
-        failOcr(QStringLiteral("图片识别失败，请重试或手动导入"));
-        return;
+        return false;
     }
 
     const QByteArray raw = file.readAll();
     file.close();
     if (raw.isEmpty()) {
         qWarning() << "empty image for OCR:" << filePath;
-        failOcr(QStringLiteral("图片识别失败，请重试或手动导入"));
-        return;
+        return false;
     }
 
     const QString suffix = QFileInfo(filePath).suffix().toLower();
@@ -391,9 +429,47 @@ void AiManager::ocrFromImage(const QString &filePath)
                                                         : QStringLiteral("image/jpeg");
     ocrImageUrl_ = QStringLiteral("data:%1;base64,%2")
                        .arg(mime, QString::fromLatin1(raw.toBase64()));
+    return true;
+}
+
+void AiManager::ocrFromImage(const QString &filePath)
+{
+    ocrCategory_.clear();
+    ocrFirstPass_.clear();
+    ocrSecondPass_.clear();
+
+    if (!prepareOcrImage(filePath)) {
+        failOcr(QStringLiteral("图片识别失败，请重试或手动导入"));
+        return;
+    }
 
     emit ocrProgress(QStringLiteral("AI 正在分析数据结构..."));
     requestOcrCategory();
+}
+
+void AiManager::ocrScoresFromImage(const QString &filePath)
+{
+    if (!prepareOcrImage(filePath)) {
+        failOcr(QStringLiteral("图片识别失败，请重试或手动导入"));
+        return;
+    }
+
+    emit ocrProgress(QStringLiteral("AI 正在读取成绩单..."));
+    postOcrChat(scoresPrompt(), kOcrTimeoutMs,
+                [this](bool ok, const QString &content, const QString &error) {
+                    if (!ok) {
+                        failOcr(error);
+                        return;
+                    }
+
+                    const QVariantList entries = parseScores(content);
+                    if (entries.isEmpty()) {
+                        failOcr(QStringLiteral("没能从成绩单里识别出姓名与分数"));
+                        return;
+                    }
+
+                    emit ocrScoresReady(entries);
+                });
 }
 
 void AiManager::requestOcrCategory()
@@ -523,10 +599,80 @@ QStringList AiManager::parseNameLines(const QString &content)
     return names;
 }
 
+QVariantList AiManager::parseScores(const QString &content)
+{
+    const int start = content.indexOf(QLatin1Char('['));
+    const int end = content.lastIndexOf(QLatin1Char(']'));
+    if (start < 0 || end <= start) {
+        return {};
+    }
+
+    const QJsonDocument document =
+        QJsonDocument::fromJson(content.mid(start, end - start + 1).toUtf8());
+    if (!document.isArray()) {
+        return {};
+    }
+
+    QVariantList entries;
+    for (const QJsonValue &value : document.array()) {
+        const QJsonObject entry = value.toObject();
+        const QString name = entry.value(QStringLiteral("name")).toString().trimmed();
+
+        // 模型有时把分数写成 "95 分" 或字符串，统一取第一个数字
+        QString rawScore = entry.value(QStringLiteral("score")).toVariant().toString();
+        static const QRegularExpression numberPattern(QStringLiteral("-?\\d+(?:\\.\\d+)?"));
+        const QRegularExpressionMatch match = numberPattern.match(rawScore);
+        if (name.isEmpty() || !match.hasMatch()) {
+            continue;
+        }
+
+        bool ok = false;
+        const double score = match.captured(0).toDouble(&ok);
+        if (!ok) {
+            continue;
+        }
+
+        QVariantMap participant;
+        participant.insert(QStringLiteral("name"), name);
+        participant.insert(QStringLiteral("score"), score);
+        entries.append(participant);
+    }
+    return entries;
+}
+
+QString AiManager::cleanExpression(const QString &content)
+{
+    QStringList lines;
+    for (QString line : content.split(QLatin1Char('\n'))) {
+        line = line.trimmed();
+        if (line.isEmpty() || line.startsWith(QStringLiteral("```"))) {
+            continue;
+        }
+
+        // “表达式：y = x^2”这类前缀不属于表达式本身
+        const int separator = line.indexOf(QChar(u'：'));
+        if (separator > 0 && separator <= 6) {
+            line = line.mid(separator + 1).trimmed();
+        }
+        if (!line.isEmpty()) {
+            lines.append(line);
+        }
+    }
+
+    if (lines.isEmpty()) {
+        return QString();
+    }
+
+    // 参数方程常被写成两行，合并成一行交给 QML 解析
+    return lines.join(QStringLiteral(", "));
+}
+
 void AiManager::emitFailure(RequestKind kind, const QString &message)
 {
     if (kind == RequestKind::MockRoster) {
         emit mockRosterFailed(message);
+    } else if (kind == RequestKind::FunctionExpression) {
+        emit functionFailed(message);
     } else {
         emit awardSpeechFailed(message);
     }
