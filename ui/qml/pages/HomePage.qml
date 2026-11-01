@@ -413,13 +413,17 @@ Item {
                 anchors.right: parent.right
                 height: page.wheelChoices.length > 1 ? 128 : 100
 
+                // 标题 + 标签组 + 提示作为一个整体居中：宽度取卡片的 60%，避免贴左或贴右
                 Column {
-                    anchors.centerIn: parent
-                    width: Math.min(stageCard.width - 280, 640)
-                    spacing: 6
+                    id: stageHeaderColumn
+
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(stageCard.width * 0.6, 560)
+                    spacing: 8
 
                     Text {
-                        width: Math.min(implicitWidth, stageCard.width - 280)
+                        width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         text: page.wheelName
                         color: Theme.textPrimary
@@ -429,75 +433,84 @@ Item {
                         elide: Text.ElideRight
                     }
 
-                    // 横向滚动标签：转盘再多也不会撑破标题区
-                    ListView {
+                    // 横向滚动标签：内容少时整体居中，内容多时在本区域内滑动
+                    Flickable {
                         id: wheelTabs
 
                         visible: page.wheelChoices.length > 1
-                        width: Math.min(contentWidth > 0 ? contentWidth : parent.width,
-                                        parent.width)
+                        width: Math.min(wheelTabRow.width, parent.width)
                         height: 26
                         anchors.horizontalCenter: parent.horizontalCenter
-                        orientation: ListView.Horizontal
-                        spacing: 6
+                        contentWidth: wheelTabRow.width
+                        contentHeight: height
                         clip: true
                         boundsBehavior: Flickable.StopAtBounds
-                        model: page.wheelChoices
 
-                        delegate: Rectangle {
-                            id: wheelChip
+                        Row {
+                            id: wheelTabRow
 
-                            property bool holdHandled: false
+                            height: 26
+                            spacing: 6
 
-                            width: Math.min(wheelChipText.implicitWidth + 22, 180)
-                            height: 24
-                            radius: 12
-                            color: index === page.selectedWheel
-                                   ? Theme.primary
-                                   : Theme.surfaceAlt
-                            border.width: 1
-                            border.color: index === page.selectedWheel
-                                          ? Theme.primary
-                                          : Theme.border
+                            Repeater {
+                                model: page.wheelChoices
 
-                            Text {
-                                id: wheelChipText
-                                width: Math.min(implicitWidth, 158)
-                                anchors.centerIn: parent
-                                text: modelData.name
-                                horizontalAlignment: Text.AlignHCenter
-                                elide: Text.ElideRight
-                                color: index === page.selectedWheel
-                                       ? Theme.white
-                                       : Theme.textSecondary
-                                font.family: Theme.fontFamily
-                                font.pixelSize: 11
-                                font.weight: Font.DemiBold
-                            }
+                                delegate: Rectangle {
+                                    id: wheelChip
 
-                            MouseArea {
-                                anchors.fill: parent
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
+                                    property bool holdHandled: false
 
-                                onPressed: wheelChip.holdHandled = false
+                                    width: Math.min(wheelChipText.implicitWidth + 22, 180)
+                                    height: 24
+                                    radius: 12
+                                    color: index === page.selectedWheel
+                                           ? Theme.primary
+                                           : Theme.surfaceAlt
+                                    border.width: 1
+                                    border.color: index === page.selectedWheel
+                                                  ? Theme.primary
+                                                  : Theme.border
 
-                                onPressAndHold: {
-                                    wheelChip.holdHandled = true
-                                    if (modelData.custom)
-                                        page.requestDeleteWheel(modelData.name)
-                                }
+                                    Text {
+                                        id: wheelChipText
+                                        width: Math.min(implicitWidth, 158)
+                                        anchors.centerIn: parent
+                                        text: modelData.name
+                                        horizontalAlignment: Text.AlignHCenter
+                                        elide: Text.ElideRight
+                                        color: index === page.selectedWheel
+                                               ? Theme.white
+                                               : Theme.textSecondary
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: 11
+                                        font.weight: Font.DemiBold
+                                    }
 
-                                onClicked: function(mouse) {
-                                    if (wheelChip.holdHandled)
-                                        return
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
 
-                                    if (mouse.button === Qt.RightButton) {
-                                        if (modelData.custom)
-                                            page.requestDeleteWheel(modelData.name)
-                                    } else {
-                                        page.selectWheel(index)
+                                        onPressed: wheelChip.holdHandled = false
+
+                                        onPressAndHold: {
+                                            wheelChip.holdHandled = true
+                                            if (modelData.custom)
+                                                page.requestDeleteWheel(modelData.name)
+                                        }
+
+                                        onClicked: function(mouse) {
+                                            if (wheelChip.holdHandled)
+                                                return
+
+                                            if (mouse.button === Qt.RightButton) {
+                                                if (modelData.custom)
+                                                    page.requestDeleteWheel(modelData.name)
+                                            } else {
+                                                page.selectWheel(index)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -505,7 +518,7 @@ Item {
                     }
 
                     Text {
-                        width: Math.min(implicitWidth, stageCard.width - 280)
+                        width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         text: page.wheelHint
                         color: Theme.textSecondary

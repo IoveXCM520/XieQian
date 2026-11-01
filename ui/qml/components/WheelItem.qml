@@ -47,20 +47,25 @@ Item {
         if (spinAnimation.running)
             return
 
-        // 落点对齐到扇区中心：既让指针不压在分割线上，
-        // 也保证停止后文字保持设计时的放射朝向。
+        // 坐标系约定：扇区 0 从 -90°（指针所在的 12 点方向）开始顺时针绘制，
+        // 所以扇区 k 的中心相对 12 点偏移 k*360/N + 180/N 度。
+        // 指针固定朝上，盘面需要转过 (360 - 中心角度) 才能让中心对准指针。
         var count = effectiveCount()
         var stepDegrees = 360 / count
         var sector = targetIndex
         if (sector === undefined || sector < 0 || sector >= count)
             sector = Math.floor(Math.random() * count)
 
-        var alignment = ((count - sector) % count) * stepDegrees
+        var centerDegrees = sector * stepDegrees + stepDegrees / 2
+        var targetRotation = (360 - centerDegrees) % 360
+        var currentRotation = ((angle % 360) + 360) % 360
+        // 归一化到 [0, 360)，每次都在当前角度上继续顺时针转，不会倒转
+        var delta = ((targetRotation - currentRotation) % 360 + 360) % 360
 
         spinActive = true
         spinAnimation.from = angle
-        // 5 整圈 + 落点偏移：落点偏移保证指针停在目标扇区中心
-        spinAnimation.to = angle + 1800 + alignment
+        // 5 整圈 + 精确落点；0.001° 抵消浮点误差，确保停在扇区正中间而非分割线
+        spinAnimation.to = angle + 5 * 360 + delta + 0.001
         spinAnimation.start()
     }
 
@@ -125,7 +130,8 @@ Item {
 
                 var count = labels.length
                 var step = Math.PI * 2 / count
-                var start = -Math.PI / 2 - step / 2
+                // 扇区 0 的前缘正好在 12 点（-90°），与顶部指针同一坐标系
+                var start = -Math.PI / 2
                 var pi2 = Math.PI * 2
 
                 // 高饱和、冷暖交替的现代色盘
@@ -185,8 +191,18 @@ Item {
                 ctx.fillStyle = vignette
                 ctx.fill()
 
-                // 4. 放射文字：选项越多字号越小，避免文字挤压重叠
+                // 4. 放射文字：选项多时整体外移、字号缩小并留出上下间距
                 // 使用通用 sans-serif，避免 Canvas 字体库找不到品牌字体时回退成默认 10px
+                var crowded = count > 8
+                // 文字中心到圆心的距离：密集时更靠外，远离中心与盘面边缘
+                var textRadius = radius * (crowded ? 0.76 : 0.66)
+                var outerLimit = radius * (crowded ? 0.92 : 0.90)
+                var innerLimit = radius * (crowded ? 0.50 : 0.42)
+                // 文字总宽同时受外侧留白、内侧留白与整体宽度限制
+                var textWidth = Math.min(radius * 0.44,
+                                         2 * (outerLimit - textRadius),
+                                         2 * (textRadius - innerLimit))
+
                 var fontSize = 14
                 if (count > 24)
                     fontSize = 9
@@ -194,44 +210,50 @@ Item {
                     fontSize = 11
                 else if (count > 10)
                     fontSize = 12
+
+                // 用文字最内端的圆弧长度反推字号上限，保证相邻扇区文字不会相碰
+                var innerTextRadius = textRadius - textWidth / 2
+                var arcAtInner = innerTextRadius * step
+                var showLabels = arcAtInner >= 11
+                if (showLabels)
+                    fontSize = Math.min(fontSize, Math.max(8, Math.round(arcAtInner * 0.72)))
+
                 ctx.font = "bold " + fontSize + "px sans-serif"
 
-                for (var j = 0; j < count; ++j) {
-                    var mid = start + (j + 0.5) * step
-                    var flipped = mid > Math.PI / 2 && mid < Math.PI * 1.5
+                if (showLabels) {
+                    for (var j = 0; j < count; ++j) {
+                        var mid = start + (j + 0.5) * step
+                        var flipped = mid > Math.PI / 2 && mid < Math.PI * 1.5
 
-                    ctx.save()
-                    ctx.translate(cx, cy)
-                    ctx.rotate(mid)
-                    ctx.translate(radius * 0.66, 0)
+                        ctx.save()
+                        ctx.translate(cx, cy)
+                        ctx.rotate(mid)
+                        ctx.translate(textRadius, 0)
 
-                    // 左半圈翻转 180°，避免文字完全倒置
-                    if (flipped)
-                        ctx.rotate(Math.PI)
+                        // 左半圈翻转 180°，避免文字完全倒置
+                        if (flipped)
+                            ctx.rotate(Math.PI)
 
-                    ctx.textAlign = "center"
-                    ctx.textBaseline = "middle"
-                    ctx.fillStyle = "#FFFFFF"
-                    ctx.shadowColor = "rgba(15,23,42,0.58)"
-                    ctx.shadowBlur = 3
-                    ctx.shadowOffsetX = 0
-                    ctx.shadowOffsetY = flipped ? -1.4 : 1.4
+                        ctx.textAlign = "center"
+                        ctx.textBaseline = "middle"
+                        ctx.fillStyle = "#FFFFFF"
+                        ctx.shadowColor = "rgba(15,23,42,0.58)"
+                        ctx.shadowBlur = 3
+                        ctx.shadowOffsetX = 0
+                        ctx.shadowOffsetY = flipped ? -1.4 : 1.4
 
-                    var text = String(labels[j])
-                    // 同时受半径与扇区弧长约束，扇区越窄允许的字宽越小
-                    var arcWidth = 2 * Math.sin(step / 2) * radius * 0.66 * 0.86
-                    var maxWidth = Math.min(radius * 0.50,
-                                            Math.max(radius * 0.16, arcWidth))
-                    if (ctx.measureText(text).width > maxWidth) {
-                        var clipped = text
-                        while (clipped.length > 1
-                               && ctx.measureText(clipped + "…").width > maxWidth)
-                            clipped = clipped.substring(0, clipped.length - 1)
-                        text = clipped + "…"
+                        var text = String(labels[j])
+                        if (ctx.measureText(text).width > textWidth) {
+                            var clipped = text
+                            while (clipped.length > 1
+                                   && ctx.measureText(clipped + "…").width > textWidth)
+                                clipped = clipped.substring(0, clipped.length - 1)
+                            text = clipped + "…"
+                        }
+
+                        ctx.fillText(text, 0, 0)
+                        ctx.restore()
                     }
-
-                    ctx.fillText(text, 0, 0)
-                    ctx.restore()
                 }
             }
         }

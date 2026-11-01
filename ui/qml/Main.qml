@@ -179,6 +179,8 @@ ApplicationWindow {
                     moving = false
                 }
 
+                onCanceled: moving = false
+
                 onDoubleClicked: function(mouse) {
                     if (moving)
                         return
@@ -414,12 +416,16 @@ ApplicationWindow {
         // 八方向缩放热区
         // ─────────────────────────────────────────────────────────
         Item {
+            id: resizeBorders
+
             anchors.fill: parent
             z: 10000
+            // 最大化时整个缩放热区失效，避免抢占标题栏与内容区的鼠标事件
+            visible: !window.isMaximized
 
             MouseArea {
                 width: parent.width - 24
-                height: 4
+                height: 6
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
                 enabled: !window.isMaximized
@@ -429,7 +435,7 @@ ApplicationWindow {
 
             MouseArea {
                 width: parent.width - 24
-                height: 4
+                height: 6
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
                 enabled: !window.isMaximized
@@ -438,7 +444,7 @@ ApplicationWindow {
             }
 
             MouseArea {
-                width: 4
+                width: 6
                 height: parent.height - 24
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.left: parent.left
@@ -448,7 +454,7 @@ ApplicationWindow {
             }
 
             MouseArea {
-                width: 4
+                width: 6
                 height: parent.height - 24
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
