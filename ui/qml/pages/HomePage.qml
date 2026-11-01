@@ -57,6 +57,9 @@ Item {
     readonly property var wheelWeights: customWheel ? [] : rosterWeights
 
     property bool busy: false
+    // 抽奖期间名单刷新要延后：动态权重会在开奖瞬间改写扇区宽度，
+    // 旋转中重绘盘面会让指针落点与中奖者错位
+    property bool rosterRefreshPending: false
     // 抽奖全程锁：点击开始到结果弹窗关闭之间为 true，供 Main 禁用导航与重复点击
     property bool drawLock: false
     readonly property bool isDrawing: drawLock
@@ -228,6 +231,11 @@ Item {
         pendingWinners = []
         pendingIndex = -1
         safetyTimer.stop()
+
+        if (rosterRefreshPending) {
+            rosterRefreshPending = false
+            refreshRosterOptions()
+        }
 
         // 自定义转盘在前端随机，后端不知道结果，这里补齐历史记录
         if (customWheel) {
@@ -734,6 +742,10 @@ Item {
         }
 
         function onRosterUpdated() {
+            if (page.busy) {
+                page.rosterRefreshPending = true
+                return
+            }
             page.refreshRosterOptions()
         }
 

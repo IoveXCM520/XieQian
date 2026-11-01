@@ -37,6 +37,10 @@ void applyNativeThickFrame(QQuickWindow *window)
     }
 
     const LONG_PTR style = GetWindowLongPtr(hwnd, GWL_STYLE);
+    if ((style & WS_THICKFRAME) != 0) {
+        return;
+    }
+
     SetWindowLongPtr(hwnd, GWL_STYLE, style | WS_THICKFRAME);
     SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
@@ -145,13 +149,19 @@ int main(int argc, char *argv[])
         applyNativeThickFrame(window);
         app.installNativeEventFilter(new FramelessResizeFilter(window));
 
-        // 画中画会改窗口 flags，原生窗口可能被重建，重建后重新补一次样式
+        // 画中画会改窗口 flags，Qt 重建原生窗口时会先隐藏再显示，
+        // 借 visibilityChanged 重新补一次厚边框样式
         QObject::connect(window, &QWindow::visibilityChanged, window, [window]() {
             QTimer::singleShot(0, window, [window]() { applyNativeThickFrame(window); });
         });
-        QObject::connect(window, &QWindow::flagsChanged, window, [window](Qt::WindowFlags) {
-            QTimer::singleShot(0, window, [window]() { applyNativeThickFrame(window); });
+
+        // 部分平台路径下 flags 变化不会发 visibilityChanged，
+        // 低频检查一次（样式已在时直接返回，开销极小）
+        auto *frameWatch = new QTimer(window);
+        QObject::connect(frameWatch, &QTimer::timeout, window, [window]() {
+            applyNativeThickFrame(window);
         });
+        frameWatch->start(1000);
     }
 #endif
 
