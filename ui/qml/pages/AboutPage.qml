@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 
 import ".."
 import "../components"
@@ -198,13 +199,13 @@ Item {
                     Item { width: 1; height: 26 }
 
                     // ── 信息区 ──
-                    Row {
+                    RowLayout {
                         width: parent.width
                         spacing: 16
 
                         Text {
-                            width: 64
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.preferredWidth: 64
+                            Layout.alignment: Qt.AlignVCenter
                             text: "作者"
                             color: Theme.textTertiary
                             font.family: Theme.fontFamily
@@ -213,23 +214,26 @@ Item {
                         }
 
                         Text {
+                            Layout.alignment: Qt.AlignVCenter
                             text: "汐辞梦"
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontH2
                             font.weight: Font.DemiBold
                         }
+
+                        Item { Layout.fillWidth: true }
                     }
 
                     Item { width: 1; height: 16 }
 
-                    Row {
+                    RowLayout {
                         width: parent.width
                         spacing: 16
 
                         Text {
-                            width: 64
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.preferredWidth: 64
+                            Layout.alignment: Qt.AlignVCenter
                             text: "QQ"
                             color: Theme.textTertiary
                             font.family: Theme.fontFamily
@@ -238,12 +242,15 @@ Item {
                         }
 
                         Text {
+                            Layout.alignment: Qt.AlignVCenter
                             text: "2995723028"
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontBody
                             font.letterSpacing: 1
                         }
+
+                        Item { Layout.fillWidth: true }
                     }
 
                     Item { width: 1; height: 22 }

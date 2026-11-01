@@ -100,6 +100,17 @@ QString cleanCategory(const QString &content)
         text.chop(1);
     }
 
+    // 模型偶尔把答案写成一整句话，命中已知类别时直接采用该词
+    static const QStringList knownCategories{QStringLiteral("姓名"), QStringLiteral("名字"),
+                                             QStringLiteral("学号"), QStringLiteral("年龄"),
+                                             QStringLiteral("爱好"), QStringLiteral("班级"),
+                                             QStringLiteral("编号"), QStringLiteral("昵称")};
+    for (const QString &category : knownCategories) {
+        if (text.contains(category)) {
+            return category;
+        }
+    }
+
     return text.left(12).trimmed();
 }
 
@@ -117,7 +128,7 @@ QStringList pickBestResult(const QStringList &first, const QStringList &second,
         return second;
     }
 
-    const QStringList candidates{first, second, third};
+    const QList<QStringList> candidates{first, second, third};
     QStringList best;
     for (const QStringList &candidate : candidates) {
         if (candidate.size() > best.size()) {
@@ -407,7 +418,7 @@ void AiManager::requestOcrCategory()
 void AiManager::requestOcrExtraction()
 {
     postOcrChat(extractionPrompt(ocrCategory_, false), kOcrTimeoutMs,
-                [this](bool ok, const QString &content, const QString &) {
+                [this](bool ok, const QString &content, const QString &error) {
                     if (!ok) {
                         failOcr(error);
                         return;
