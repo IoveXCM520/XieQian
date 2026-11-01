@@ -17,6 +17,8 @@ import "../components"
 Item {
     id: page
 
+    anchors.fill: parent
+
     property bool generated: false
     property string createdName: ""
     property var createdOptions: []

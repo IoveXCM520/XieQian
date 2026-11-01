@@ -16,6 +16,8 @@ import "../components"
 Item {
     id: page
 
+    anchors.fill: parent
+
     property var participants: []
     property string statusMessage: ""
     property bool statusFailed: false

@@ -16,6 +16,8 @@ import "../components"
 Item {
     id: page
 
+    anchors.fill: parent
+
     // 空字符串表示默认名单转盘，其余为持久化的自定义转盘名
     property string wheelKey: ""
     property var rosterOptions: []
@@ -460,25 +462,23 @@ Item {
                 }
             }
 
-            // 转盘名称 + 当前名单
-            Item {
-                id: stageHeader
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: page.wheelChoices.length > 1 ? 136 : 108
+            // 标题、标签组与盘面统一由 ColumnLayout 排布：
+            // 标题永远落在转盘正上方居中，不再依赖固定高度导致文字被卡片裁掉
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 4
 
-                // 标题、标签组与提示作为一个整体居中，视觉重心落在盘面正上方
-                Column {
+                ColumnLayout {
                     id: stageHeaderColumn
 
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Math.min(stageCard.width * 0.72, 640)
-                    spacing: 10
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 8
+                    Layout.maximumWidth: Math.min(stageCard.width * 0.8, 660)
+                    spacing: 8
 
                     Text {
-                        width: parent.width
+                        Layout.fillWidth: true
                         horizontalAlignment: Text.AlignHCenter
                         text: page.wheelName
                         color: Theme.textPrimary
@@ -494,9 +494,9 @@ Item {
                         id: wheelTabs
 
                         visible: page.wheelChoices.length > 1
-                        width: Math.min(wheelTabRow.width, parent.width)
-                        height: 26
-                        anchors.horizontalCenter: parent.horizontalCenter
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: Math.min(wheelTabRow.width, 640)
+                        Layout.preferredHeight: 26
                         contentWidth: wheelTabRow.width
                         contentHeight: height
                         clip: true
@@ -574,7 +574,7 @@ Item {
                     }
 
                     Text {
-                        width: parent.width
+                        Layout.fillWidth: true
                         horizontalAlignment: Text.AlignHCenter
                         text: page.wheelHint
                         color: Theme.textTertiary
@@ -583,45 +583,42 @@ Item {
                         elide: Text.ElideRight
                     }
                 }
-            }
 
-            Item {
-                id: stageBody
-                anchors.top: stageHeader.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                anchors.margins: 8
+                Item {
+                    id: stageBody
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
 
-                WheelItem {
-                    id: wheelItem
-                    anchors.centerIn: parent
-                    width: Math.max(0, Math.min(parent.width, parent.height) * 0.96)
-                    height: width
-                    options: page.wheelOptions
-                    weights: page.wheelWeights
-                    showPointer: true
-                    motionEnabled: page.animationEnabled
-                    onFinished: page.finishDraw()
+                    WheelItem {
+                        id: wheelItem
+                        anchors.centerIn: parent
+                        width: Math.max(0, Math.min(parent.width, parent.height) * 0.96)
+                        height: width
+                        options: page.wheelOptions
+                        weights: page.wheelWeights
+                        showPointer: true
+                        motionEnabled: page.animationEnabled
+                        onFinished: page.finishDraw()
+                    }
+
+                    // 画中画按钮紧贴转盘左右两侧，不再贴在卡片边缘
+                    PipButton {
+                        anchors.left: wheelItem.left
+                        anchors.leftMargin: -40
+                        anchors.verticalCenter: wheelItem.verticalCenter
+                        hint: "缩小为悬浮窗"
+                        onClicked: page.requestPip()
+                    }
+
+                    PipButton {
+                        anchors.right: wheelItem.right
+                        anchors.rightMargin: -40
+                        anchors.verticalCenter: wheelItem.verticalCenter
+                        hint: "缩小为悬浮窗"
+                        onClicked: page.requestPip()
+                    }
                 }
             }
-        }
-
-        // 左右两侧的画中画悬浮按钮：点到后窗口缩小成置顶悬浮窗
-        PipButton {
-            anchors.left: stageCard.left
-            anchors.leftMargin: 12
-            anchors.verticalCenter: stageCard.verticalCenter
-            hint: "缩小为悬浮窗"
-            onClicked: page.requestPip()
-        }
-
-        PipButton {
-            anchors.right: stageCard.right
-            anchors.rightMargin: 12
-            anchors.verticalCenter: stageCard.verticalCenter
-            hint: "缩小为悬浮窗"
-            onClicked: page.requestPip()
         }
     }
 

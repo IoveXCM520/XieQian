@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
-import QtQuick.Layouts
-import QtQuick.Particles
 
 import "."
 import "pages"
@@ -399,18 +397,21 @@ ApplicationWindow {
                 id: pageViewport
                 anchors.fill: parent
 
-                StackLayout {
+                Item {
                     id: pageStack
                     width: parent.width
                     height: parent.height
-                    currentIndex: 0
+                    // 页面自身保持 anchors.fill: parent，切换时只切换可见性
+                    property int currentIndex: 0
 
                     HomePage {
                         id: homePage
+                        visible: pageStack.currentIndex === 0
                     }
 
                     AddPage {
                         id: addPage
+                        visible: pageStack.currentIndex === 1
 
                         onWheelCreated: function(name, options) {
                             if (backendBridge.saveCustomWheel(name, options))
@@ -418,14 +419,30 @@ ApplicationWindow {
                         }
                     }
 
-                    RosterPage {}
-                    HistoryPage {}
-                    ToolsPage {}
-                    AboutPage {}
-                    SettingsPage {}
+                    RosterPage {
+                        visible: pageStack.currentIndex === 2
+                    }
+
+                    HistoryPage {
+                        visible: pageStack.currentIndex === 3
+                    }
+
+                    ToolsPage {
+                        visible: pageStack.currentIndex === 4
+                    }
+
+                    AboutPage {
+                        visible: pageStack.currentIndex === 5
+                    }
+
+                    SettingsPage {
+                        visible: pageStack.currentIndex === 6
+                    }
 
                     // 开发者控制台：只从设置页的隐藏入口进入，不占导航位
-                    DeveloperPage {}
+                    DeveloperPage {
+                        visible: pageStack.currentIndex === 7
+                    }
                 }
             }
 
@@ -720,60 +737,53 @@ ApplicationWindow {
                 }
             }
 
-            // 从底部向上漂浮的星尘：ImageParticle 自带淡入淡出
-            ParticleSystem {
-                id: splashStars
+            // 轻量光点：纯 Rectangle + NumberAnimation，不依赖 QtQuick.Particles
+            Repeater {
+                model: 14
 
-                anchors.fill: parent
-                z: 1
-                running: splashScreen.visible
-            }
+                delegate: Rectangle {
+                    id: splashDot
 
-            Emitter {
-                system: splashStars
-                x: 0
-                y: splashBackground.height - 6
-                width: splashBackground.width
-                height: 6
-                shape: RectangleShape { fill: true }
-                emitRate: 16
-                lifeSpan: 7000
-                lifeSpanVariation: 2600
-                size: 9
-                sizeVariation: 7
-                maximumEmitted: 220
+                    readonly property real startY: splashBackground.height
+                                                      * (0.62 + 0.32 * ((index * 37) % 100) / 100)
 
-                velocity: AngleDirection {
-                    angle: 270
-                    angleVariation: 10
-                    magnitude: 16
-                    magnitudeVariation: 10
+                    x: splashBackground.width * ((index * 61) % 100) / 100
+                    y: startY
+                    width: 3 + index % 4
+                    height: width
+                    radius: width / 2
+                    color: index % 3 === 0 ? "#8FC4FF" : "#A9E6D3"
+                    opacity: 0.0
+                    z: 1
+
+                    NumberAnimation on y {
+                        running: splashScreen.visible
+                        loops: Animation.Infinite
+                        from: splashDot.startY
+                        to: splashDot.startY - splashBackground.height * 0.42
+                        duration: 7000 + (index % 6) * 1100
+                        easing.type: Easing.Linear
+                    }
+
+                    SequentialAnimation on opacity {
+                        running: splashScreen.visible
+                        loops: Animation.Infinite
+
+                        NumberAnimation {
+                            from: 0.0
+                            to: 0.55
+                            duration: 1800 + (index % 4) * 320
+                            easing.type: Easing.InOutSine
+                        }
+
+                        NumberAnimation {
+                            from: 0.55
+                            to: 0.0
+                            duration: 2600 + (index % 3) * 420
+                            easing.type: Easing.InOutSine
+                        }
+                    }
                 }
-
-                acceleration: PointDirection {
-                    y: -2
-                    yVariation: 2
-                }
-            }
-
-            ImageParticle {
-                system: splashStars
-                source: "qrc:///particleresources/star.png"
-                color: "#9CCBFF"
-                colorVariation: 0.12
-                alpha: 0.72
-                alphaVariation: 0.35
-                entryEffect: ImageParticle.Fade
-                rotationVariation: 180
-                rotationVelocityVariation: 22
-            }
-
-            // 微弱横向漂移，避免星点走直线太死板
-            Wander {
-                system: splashStars
-                xVariance: 44
-                yVariance: 22
-                pace: 700
             }
 
             Column {
@@ -797,8 +807,14 @@ ApplicationWindow {
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                         mipmap: true
-                        opacity: 0.0
-                        scale: 0.96
+                        scale: 1.0
+
+                        NumberAnimation on scale {
+                            from: 0.94
+                            to: 1.0
+                            duration: 760
+                            easing.type: Easing.OutCubic
+                        }
                     }
                 }
 
@@ -808,7 +824,6 @@ ApplicationWindow {
                     id: splashTitle
                     width: parent.width
                     text: "撷签"
-                    opacity: 0.0
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textPrimary
                     font.family: Theme.fontFamily
@@ -823,7 +838,6 @@ ApplicationWindow {
                     id: splashSubtitle
                     width: parent.width
                     text: "XIE QIAN"
-                    opacity: 0.0
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
@@ -837,7 +851,6 @@ ApplicationWindow {
                     id: splashTagline
                     width: parent.width
                     text: "让每一次选择，都值得期待"
-                    opacity: 0.0
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
@@ -874,7 +887,6 @@ ApplicationWindow {
                     id: splashStatus
                     width: parent.width
                     text: "正在准备签盘"
-                    opacity: 0.0
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textTertiary
                     font.family: Theme.fontFamily
@@ -893,78 +905,19 @@ ApplicationWindow {
             }
         }
 
-        SequentialAnimation {
-            id: splashIntro
-            running: true
-
-            PauseAnimation { duration: 100 }
-
-            ParallelAnimation {
-                NumberAnimation {
-                    target: splashLogo
-                    property: "opacity"
-                    to: 1.0
-                    duration: 620
-                    easing.type: Easing.OutCubic
-                }
-
-                NumberAnimation {
-                    target: splashLogo
-                    property: "scale"
-                    to: 1.0
-                    duration: 760
-                    easing.type: Easing.OutCubic
-                }
-            }
-
-            ParallelAnimation {
-                NumberAnimation {
-                    target: splashTitle
-                    property: "opacity"
-                    to: 1.0
-                    duration: 300
-                    easing.type: Easing.OutCubic
-                }
-
-                NumberAnimation {
-                    target: splashSubtitle
-                    property: "opacity"
-                    to: 1.0
-                    duration: 340
-                    easing.type: Easing.OutCubic
-                }
-
-                NumberAnimation {
-                    target: splashTagline
-                    property: "opacity"
-                    to: 1.0
-                    duration: 380
-                    easing.type: Easing.OutCubic
-                }
-            }
-
-            NumberAnimation {
-                target: splashStatus
-                property: "opacity"
-                to: 1.0
-                duration: 240
-                easing.type: Easing.OutCubic
-            }
-        }
-
         NumberAnimation {
             id: progressAnimation
             target: progressFill
             property: "width"
             from: 0
             to: progressTrack.width
-            duration: 2400
+            duration: 1200
             easing.type: Easing.InOutCubic
             running: true
         }
 
         Timer {
-            interval: 2500
+            interval: 1400
             running: true
             repeat: false
             onTriggered: splashFadeOut.start()
@@ -975,7 +928,7 @@ ApplicationWindow {
             target: splashScreen
             property: "opacity"
             to: 0.0
-            duration: 460
+            duration: 420
             easing.type: Easing.OutCubic
 
             onFinished: {

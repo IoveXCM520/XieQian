@@ -14,6 +14,8 @@ import "../components"
 Item {
     id: page
 
+    anchors.fill: parent
+
     property var records: []
 
     readonly property int recordCount: records.length

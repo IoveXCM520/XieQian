@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 
 import ".."
 
@@ -10,6 +11,8 @@ import ".."
 */
 Item {
     id: page
+
+    anchors.fill: parent
 
     Rectangle {
         id: poster
@@ -44,15 +47,16 @@ Item {
             }
         }
 
-        Row {
+        RowLayout {
             id: columns
 
             anchors.fill: parent
+            spacing: 0
 
             // ── 左栏：品牌 ──
             Item {
-                width: parent.width * 0.4
-                height: parent.height
+                Layout.preferredWidth: parent.width * 0.4
+                Layout.fillHeight: true
 
                 Column {
                     anchors.centerIn: parent
@@ -115,7 +119,7 @@ Item {
                         Text {
                             id: versionText
                             anchors.centerIn: parent
-                            text: "v1.0.9.5"
+                            text: "v1.0.9.9"
                             color: Theme.textSecondary
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontMicro
@@ -127,16 +131,16 @@ Item {
 
             // ── 竖直分隔线 ──
             Rectangle {
-                width: 1
-                height: parent.height * 0.62
-                anchors.verticalCenter: parent.verticalCenter
+                Layout.preferredWidth: 1
+                Layout.preferredHeight: parent.height * 0.62
+                Layout.alignment: Qt.AlignVCenter
                 color: Theme.withAlpha(Theme.textPrimary, 0.07)
             }
 
             // ── 右栏：信息 ──
             Item {
-                width: parent.width * 0.6 - 1
-                height: parent.height
+                Layout.fillWidth: true
+                Layout.fillHeight: true
 
                 Flickable {
                     id: infoFlick

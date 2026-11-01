@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
-import QtQuick.Particles
 
 import ".."
 
@@ -177,7 +176,7 @@ Item {
     Keys.onEscapePressed: resultCard.close()
 
     // ─────────────────────────────────────────────────────────────
-    // 中奖彩带：全屏细长矩形粒子，重力下落 + 随机旋转
+    // 中奖彩带：纯 QML 矩形 + 位移动画，不依赖 QtQuick.Particles
     // ─────────────────────────────────────────────────────────────
     Loader {
         id: confettiLoader
@@ -190,7 +189,7 @@ Item {
 
     Timer {
         id: confettiTimer
-        interval: 2000
+        interval: 3000
         repeat: false
         onTriggered: confettiLoader.active = false
     }
@@ -203,75 +202,51 @@ Item {
 
             anchors.fill: parent
 
-            ParticleSystem {
-                id: confettiSystem
-                anchors.fill: parent
-            }
+            Repeater {
+                model: 90
 
-            Emitter {
-                id: confettiEmitter
-
-                system: confettiSystem
-                x: 0
-                y: -24
-                width: confettiField.width
-                height: 4
-                shape: RectangleShape { fill: true }
-                emitRate: 0
-                lifeSpan: 2800
-                lifeSpanVariation: 400
-                maximumEmitted: 200
-                size: 14
-                sizeVariation: 6
-
-                velocity: AngleDirection {
-                    angle: 90
-                    angleVariation: 14
-                    magnitude: 160
-                    magnitudeVariation: 90
-                }
-
-                acceleration: PointDirection {
-                    y: 150
-                    yVariation: 40
-                }
-            }
-
-            Gravity {
-                system: confettiSystem
-                magnitude: 90
-                angle: 90
-            }
-
-            ItemParticle {
-                system: confettiSystem
-                delegate: ribbonDelegate
-            }
-
-            Component {
-                id: ribbonDelegate
-
-                Rectangle {
+                delegate: Rectangle {
                     id: ribbon
 
+                    readonly property real startX: ((index * 97) % 100) / 100 * confettiField.width
+
+                    x: startX
+                    y: -24
                     width: 6
                     height: 18
                     radius: 1.5
                     transformOrigin: Item.Center
-                    color: ["#3B8BF6", "#2ED4A5", "#FFD600", "#FF6D00", "#F54A45", "#B36BFF"]
-                           [Math.floor(Math.random() * 6)]
+                    color: ["#3B8BF6", "#2ED4A5", "#FFD600", "#FF6D00", "#F54A45", "#B36BFF"][index % 6]
+
+                    // 横向飘移
+                    property real drift: 0
+                    transform: Translate { x: ribbon.drift }
+
+                    NumberAnimation on y {
+                        running: true
+                        from: -24
+                        to: confettiField.height + 40
+                        duration: 2000 + (index % 5) * 260
+                        easing.type: Easing.InQuad
+                    }
+
+                    NumberAnimation on drift {
+                        running: true
+                        from: 0
+                        to: (index % 2 === 0 ? 1 : -1) * (18 + (index % 5) * 14)
+                        duration: 1600 + (index % 7) * 140
+                        easing.type: Easing.InOutSine
+                    }
 
                     RotationAnimator on rotation {
                         from: 0
-                        to: 360 * (Math.random() < 0.5 ? -1 : 1)
-                        duration: 900 + Math.random() * 900
+                        to: 360 * (index % 2 === 0 ? 1 : -1)
+                        duration: 900 + (index % 4) * 220
                         loops: Animation.Infinite
                         running: true
                     }
                 }
             }
-
-            Component.onCompleted: confettiEmitter.burst(170)
         }
     }
 

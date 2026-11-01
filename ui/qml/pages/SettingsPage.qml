@@ -15,6 +15,8 @@ import "../components"
 Item {
     id: page
 
+    anchors.fill: parent
+
     property string pendingRestorePath: ""
     property string developerError: ""
     readonly property string developerPassword: "LuvXcm080511"
@@ -107,21 +109,21 @@ Item {
             anchors.bottom: parent.bottom
             clip: true
             contentWidth: width
-            contentHeight: settingsColumn.height
+            contentHeight: settingsColumn.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
 
             ScrollBar.vertical: ScrollBar {
                 policy: ScrollBar.AlwaysOff
             }
 
-            Column {
+            ColumnLayout {
                 id: settingsColumn
 
                 width: flick.width
                 spacing: 8
 
                 Text {
-                    width: parent.width
+                    Layout.fillWidth: true
                     text: "偏好设置"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
@@ -132,8 +134,8 @@ Item {
                 }
 
                 Rectangle {
-                    width: parent.width
-                    height: 72
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 72
                     radius: Theme.radiusListCard
                     color: Theme.surface
                     border.width: 1
@@ -179,8 +181,8 @@ Item {
                 }
 
                 Rectangle {
-                    width: parent.width
-                    height: 72
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 72
                     radius: Theme.radiusListCard
                     color: Theme.surface
                     border.width: 1
@@ -226,7 +228,7 @@ Item {
                 }
 
                 Text {
-                    width: parent.width
+                    Layout.fillWidth: true
                     text: "AI 助手配置"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
@@ -237,8 +239,8 @@ Item {
                 }
 
                 Rectangle {
-                    width: parent.width
-                    height: aiColumn.height + 40
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: aiColumn.implicitHeight + 40
                     radius: Theme.radiusListCard
                     color: Theme.surface
                     border.width: 1
@@ -489,7 +491,7 @@ Item {
                 }
 
                 Text {
-                    width: parent.width
+                    Layout.fillWidth: true
                     text: "数据管理"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
@@ -500,8 +502,8 @@ Item {
                 }
 
                 Rectangle {
-                    width: parent.width
-                    height: 76
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 76
                     radius: Theme.radiusListCard
                     color: Theme.surface
                     border.width: 1
@@ -552,8 +554,8 @@ Item {
                 }
 
                 Rectangle {
-                    width: parent.width
-                    height: 76
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 76
                     radius: Theme.radiusListCard
                     color: Theme.surface
                     border.width: 1
@@ -606,7 +608,7 @@ Item {
                 }
 
                 Text {
-                    width: parent.width
+                    Layout.fillWidth: true
                     text: "危险操作"
                     color: Theme.danger
                     font.family: Theme.fontFamily
@@ -617,8 +619,8 @@ Item {
                 }
 
                 Rectangle {
-                    width: parent.width
-                    height: 86
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 86
                     radius: Theme.radiusListCard
                     color: Theme.surface
                     border.width: 1
@@ -666,8 +668,8 @@ Item {
 
                 // 隐藏入口：不显眼的小字，点开后需要输入密码
                 Item {
-                    width: parent.width
-                    height: 36
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 36
 
                     Text {
                         anchors.right: parent.right
@@ -688,8 +690,8 @@ Item {
                 }
 
                 Item {
-                    width: parent.width
-                    height: 16
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 16
                 }
             }
         }
@@ -705,7 +707,8 @@ Item {
         anchors.centerIn: parent
         modal: true
         width: 400
-        padding: 32
+        height: 200
+        padding: 0
 
         background: Rectangle {
             radius: Theme.radiusDialog
@@ -722,100 +725,91 @@ Item {
             }
         }
 
-        contentItem: Column {
-            width: 336
-            spacing: 0
+        contentItem: Item {
+            ColumnLayout {
+                anchors.centerIn: parent
+                width: 336
+                spacing: 8
 
-            Item { width: 1; height: 6 }
-
-            Text {
-                width: parent.width
-                text: "开发者验证"
-                horizontalAlignment: Text.AlignHCenter
-                color: Theme.textPrimary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontH1
-                font.weight: Font.DemiBold
-            }
-
-            Item { width: 1; height: 10 }
-
-            Text {
-                width: parent.width
-                text: "输入密码后进入权重调校控制台"
-                horizontalAlignment: Text.AlignHCenter
-                color: Theme.textSecondary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontCaption
-            }
-
-            Item { width: 1; height: 30 }
-
-            TextField {
-                id: passwordField
-
-                width: parent.width
-                height: 48
-                leftPadding: 16
-                rightPadding: 16
-                horizontalAlignment: TextInput.AlignHCenter
-                placeholderText: "密码"
-                placeholderTextColor: Theme.textTertiary
-                echoMode: TextInput.Password
-                selectByMouse: true
-                color: Theme.textPrimary
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontBody
-                maximumLength: 64
-
-                background: Rectangle {
-                    radius: Theme.radiusControl
-                    color: passwordField.activeFocus ? Theme.surface : Theme.surfaceAlt
-                    border.width: 1
-                    border.color: passwordField.activeFocus
-                                  ? Theme.primary
-                                  : Theme.withAlpha(Theme.textPrimary, 0.08)
+                Text {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "开发者验证"
+                    color: Theme.textPrimary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontH1
+                    font.weight: Font.DemiBold
                 }
 
-                onAccepted: page.confirmDeveloperPassword()
-            }
-
-            Item { width: 1; height: 10 }
-
-            Text {
-                width: parent.width
-                height: page.developerError.length > 0 ? implicitHeight : 0
-                visible: page.developerError.length > 0
-                text: page.developerError
-                horizontalAlignment: Text.AlignHCenter
-                color: Theme.danger
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontCaption
-            }
-
-            Item { width: 1; height: 24 }
-
-            Row {
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: 12
-
-                SettingButton {
-                    width: 116
-                    height: 42
-                    text: "取消"
-                    onClicked: developerDialog.close()
+                Text {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "输入密码后进入权重调校控制台"
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
                 }
 
-                SettingButton {
-                    width: 126
-                    height: 42
-                    text: "进入"
-                    soft: true
-                    onClicked: page.confirmDeveloperPassword()
+                TextField {
+                    id: passwordField
+
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 44
+                    leftPadding: 16
+                    rightPadding: 16
+                    horizontalAlignment: TextInput.AlignHCenter
+                    placeholderText: "密码"
+                    placeholderTextColor: Theme.textTertiary
+                    echoMode: TextInput.Password
+                    selectByMouse: true
+                    color: Theme.textPrimary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontBody
+                    maximumLength: 64
+
+                    background: Rectangle {
+                        radius: Theme.radiusControl
+                        color: passwordField.activeFocus ? Theme.surface : Theme.surfaceAlt
+                        border.width: 1
+                        border.color: passwordField.activeFocus
+                                      ? Theme.primary
+                                      : Theme.withAlpha(Theme.textPrimary, 0.08)
+                    }
+
+                    onAccepted: page.confirmDeveloperPassword()
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: visible ? implicitHeight : 0
+                    visible: page.developerError.length > 0
+                    text: page.developerError
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Theme.danger
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
+                }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 12
+
+                    SettingButton {
+                        Layout.preferredWidth: 116
+                        Layout.preferredHeight: 40
+                        text: "取消"
+                        onClicked: developerDialog.close()
+                    }
+
+                    SettingButton {
+                        Layout.preferredWidth: 126
+                        Layout.preferredHeight: 40
+                        text: "进入"
+                        soft: true
+                        onClicked: page.confirmDeveloperPassword()
+                    }
                 }
             }
-
-            Item { width: 1; height: 10 }
         }
     }
 

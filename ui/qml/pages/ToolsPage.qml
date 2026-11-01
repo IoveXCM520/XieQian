@@ -14,6 +14,8 @@ import "../components/ExpressionParser.js" as Parser
 Item {
     id: page
 
+    anchors.fill: parent
+
     readonly property bool reducedMotion: !backendBridge.motionEnabled
     readonly property int modeCalculator: 0
     readonly property int modePlotter: 1
@@ -495,7 +497,11 @@ Item {
         backendBridge.aiManager.generateFunction(prompt)
     }
 
-    Component.onCompleted: drawPlot()
+    // 启动时工具页不可见，推迟到首次切到函数图像再计算，避免启动阶段白算坐标
+    onModeChanged: {
+        if (mode === modePlotter && !hasPlot && plotProgress <= 0)
+            Qt.callLater(drawPlot)
+    }
 
     Connections {
         target: backendBridge.aiManager

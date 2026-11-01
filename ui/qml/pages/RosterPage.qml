@@ -14,6 +14,8 @@ import "../components"
 Item {
     id: page
 
+    anchors.fill: parent
+
     property var participants: []
     property string removeTargetId: ""
     property string removeTargetName: ""
