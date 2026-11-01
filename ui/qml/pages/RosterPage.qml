@@ -8,7 +8,7 @@ import "../components"
 
 /*!
     名单管理页。
-    - 只保留头像、姓名、启用开关与删除
+    - 只保留头像、姓名（附带学号/分组）、启用开关与删除
     - 姓名按字数插入空格，让纵向列表看起来整齐
 */
 Item {
@@ -365,7 +365,7 @@ Item {
 
                     Text {
                         width: parent.width
-                        text: "还没有成员，去添加页导入名单"
+                        text: "还没有成员，去添加页导入名字，保存转盘时选择加入名单池"
                         horizontalAlignment: Text.AlignHCenter
                         color: Theme.textSecondary
                         font.family: Theme.fontFamily
