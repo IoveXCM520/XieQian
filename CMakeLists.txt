@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(XieQian VERSION 1.0.7.9 LANGUAGES CXX)
+project(XieQian VERSION 1.0.8 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,9 +10,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
     add_compile_options(/Zc:__cplusplus /utf-8)
 endif()
-
-# DeepSeek API Key 在配置阶段注入；未注入时为空字符串，AI 功能会提示未配置
-add_compile_definitions(DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY}")
 
 # 开启 Qt 的自动处理（MOC, UIC, RCC）
 set(CMAKE_AUTOMOC ON)

@@ -20,8 +20,12 @@ Item {
         var config = backendBridge.getAIConfig()
         if (config && config.apiKey !== undefined)
             apiKeyField.text = String(config.apiKey)
-        if (config && config.baseUrl !== undefined)
-            apiBaseField.text = String(config.baseUrl)
+
+        var baseUrl = config && config.baseUrl !== undefined ? String(config.baseUrl) : ""
+        apiBaseField.text = baseUrl.length > 0 ? baseUrl : "https://api.deepseek.com"
+
+        var model = config && config.model !== undefined ? String(config.model) : ""
+        modelField.text = model.length > 0 ? model : "deepseek-chat"
     }
 
     function showToast(message) {
@@ -298,6 +302,40 @@ Item {
                             }
                         }
 
+                        Text {
+                            text: "模型名称"
+                            color: Theme.textPrimary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontBody
+                            font.weight: Font.DemiBold
+                            topPadding: 4
+                        }
+
+                        TextField {
+                            id: modelField
+
+                            width: parent.width
+                            height: 44
+                            leftPadding: 14
+                            rightPadding: 14
+                            placeholderText: "deepseek-chat"
+                            placeholderTextColor: Theme.textTertiary
+                            color: Theme.textPrimary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontBody
+                            selectByMouse: true
+                            maximumLength: 128
+
+                            background: Rectangle {
+                                radius: Theme.radiusControl
+                                color: modelField.activeFocus ? Theme.surface : Theme.surfaceAlt
+                                border.width: 1
+                                border.color: modelField.activeFocus
+                                              ? Theme.primary
+                                              : Theme.withAlpha(Theme.textPrimary, 0.06)
+                            }
+                        }
+
                         Item {
                             width: parent.width
                             height: 38
@@ -322,7 +360,8 @@ Item {
                                 soft: true
                                 onClicked: {
                                     backendBridge.saveAIConfig(apiKeyField.text,
-                                                               apiBaseField.text)
+                                                               apiBaseField.text,
+                                                               modelField.text)
                                     page.showToast("配置已保存")
                                 }
                             }

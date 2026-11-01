@@ -28,51 +28,15 @@ ApplicationWindow {
     readonly property int sidebarWidth: Theme.sidebarWidth
     readonly property int titleBarHeight: Theme.titleBarHeight
 
-    // 自定义最大化：不使用系统 showMaximized()，避免无边框窗口原生切换时
-    // 内容裁切、黑屏与长时间卡顿
-    property bool isMaximized: false
-    property bool dragging: false
-    property bool resizing: false
-    property rect normalGeometry: Qt.rect(0, 0, 1200, 800)
-    // 创建阶段关闭动画，避免初始 1200x800 被当成一次变更而产生启动缩放
-    property bool windowReady: false
+    // 最大化/还原/缩放全部交给系统：自绘标题栏只把拖拽移交给 startSystemMove()、
+    // 把边缘拖拽移交给 startSystemResize()。窗口几何不再由 QML 逐帧写入，
+    // 否则动画中间态的尺寸与合成表面不一致，会出现内容裁切与错位
+    readonly property bool maximized: visibility === Window.Maximized
 
-    // 手写拖拽 / 缩放期间关闭几何动画，避免与鼠标位移产生黏滞
-    readonly property bool geometryAnimationEnabled: windowReady && !dragging && !resizing
+    // 首次启动欢迎弹窗：启动页淡出后再弹出
+    property bool welcomeRequested: false
 
-    Component.onCompleted: windowReady = true
-
-    Behavior on x {
-        enabled: window.geometryAnimationEnabled
-        NumberAnimation {
-            duration: 250
-            easing.type: Easing.OutCubic
-        }
-    }
-
-    Behavior on y {
-        enabled: window.geometryAnimationEnabled
-        NumberAnimation {
-            duration: 250
-            easing.type: Easing.OutCubic
-        }
-    }
-
-    Behavior on width {
-        enabled: window.geometryAnimationEnabled
-        NumberAnimation {
-            duration: 250
-            easing.type: Easing.OutCubic
-        }
-    }
-
-    Behavior on height {
-        enabled: window.geometryAnimationEnabled
-        NumberAnimation {
-            duration: 250
-            easing.type: Easing.OutCubic
-        }
-    }
+    Component.onCompleted: welcomeRequested = backendBridge.isFirstRun()
 
     readonly property bool reducedMotion: {
         if (typeof backendBridge !== "undefined" && backendBridge)
@@ -114,50 +78,55 @@ ApplicationWindow {
     }
 
     function toggleMaximize() {
-        if (isMaximized) {
-            isMaximized = false
-            x = normalGeometry.x
-            y = normalGeometry.y
-            width = normalGeometry.width
-            height = normalGeometry.height
+        if (window.maximized)
+            window.showNormal()
+        else
+            window.showMaximized()
+    }
+
+    // 最大化时拖拽标题栏：先还原，再按指针在标题栏中的相对位置摆好窗口，
+    // 最后把拖拽交给系统，得到和其他程序一致的“扯下来”手感
+    function beginTitleDrag(pressPos) {
+        if (!window.maximized) {
+            window.startSystemMove()
             return
         }
 
-        // 记录当前几何，供还原动画使用
-        normalGeometry = Qt.rect(x, y, width, height)
-        isMaximized = true
+        var screenX = window.x + pressPos.x
+        var screenY = window.y + pressPos.y
+        var ratio = window.width > 0 ? pressPos.x / window.width : 0.5
 
-        var screenWidth = Screen.desktopAvailableWidth
-        var screenHeight = Screen.desktopAvailableHeight
-        if (!(screenWidth > 0) || !(screenHeight > 0)) {
-            screenWidth = window.screen ? window.screen.width : width
-            screenHeight = window.screen ? window.screen.height : height
-        }
+        window.showNormal()
+        // 等还原后的窗口尺寸生效，才能按比例把窗口摆到指针下方
+        Qt.callLater(function() {
+            window.x = Math.round(screenX - window.width * ratio)
+            window.y = Math.round(screenY - pressPos.y)
+            window.startSystemMove()
+        })
+    }
 
-        x = 0
-        y = 0
-        width = screenWidth
-        height = screenHeight
+    // 首次启动欢迎弹窗：弹出时写入标记文件，之后不再出现
+    function openWelcome() {
+        welcomeDialog.open()
+        backendBridge.markFirstRunSeen()
     }
 
     Rectangle {
         id: windowPanel
 
-        // 直接跟随窗口尺寸而不是父节点：即使无边框窗口在极短时间内完成尺寸切换，
-        // 也不会因为内容层尺寸滞后而出现整页错位
-        anchors.top: parent.top
-        anchors.left: parent.left
-        width: window.width
-        height: window.height
-        radius: window.isMaximized ? 0 : Theme.radiusWindow
+        // 窗口内容层：最大化时铺满屏幕，窗口态时留 1px 边距与圆角
+        anchors.fill: parent
+        // 非最大化时留 1px 边距：圆角边缘的裁切不会咬掉内容
+        anchors.margins: window.maximized ? 0 : 1
+        radius: window.maximized ? 0 : Theme.radiusWindow
         color: Theme.background
-        border.width: window.isMaximized ? 0 : 1
+        border.width: window.maximized ? 0 : 1
         border.color: Theme.withAlpha(Theme.textPrimary, 0.06)
         clip: true
 
         // 最大化时立即变直角，不要有过渡动画，避免四角瞬间露出桌面
         Behavior on radius {
-            enabled: !window.isMaximized
+            enabled: !window.maximized
 
             NumberAnimation {
                 duration: Theme.durationFast
@@ -182,45 +151,32 @@ ApplicationWindow {
                 anchors.fill: parent
                 acceptedButtons: Qt.LeftButton
 
-                property point pressPoint
-                property point pressWindow
-                property point pressGlobal
+                property point pressPos
+                property bool dragging: false
 
                 onPressed: function(mouse) {
-                    pressPoint = Qt.point(mouse.x, mouse.y)
-                    pressWindow = Qt.point(window.x, window.y)
-                    pressGlobal = Qt.point(window.x + mouse.x, window.y + mouse.y)
-                    window.dragging = false
+                    pressPos = Qt.point(mouse.x, mouse.y)
+                    dragging = false
                 }
 
+                // 超过阈值才交给系统拖动：否则 startSystemMove() 会接管鼠标，
+                // 双击标题栏就再也收不到 onDoubleClicked
                 onPositionChanged: function(mouse) {
-                    if (!pressed)
+                    if (!pressed || dragging)
+                        return
+                    if (Math.abs(mouse.x - pressPos.x) <= 3
+                            && Math.abs(mouse.y - pressPos.y) <= 3)
                         return
 
-                    if (!window.dragging
-                            && Math.abs(mouse.x - pressPoint.x) <= 2
-                            && Math.abs(mouse.y - pressPoint.y) <= 2)
-                        return
-
-                    // 最大化窗口不支持拖动，避免与还原动画互相干扰
-                    if (window.isMaximized)
-                        return
-
-                    window.dragging = true
-
-                    // 用指针的屏幕坐标驱动窗口位置：窗口跟随指针后，
-                    // mouse 坐标也会随窗口一起变化，直接累加增量会抖动
-                    var globalX = window.x + mouse.x
-                    var globalY = window.y + mouse.y
-                    window.x = Math.round(pressWindow.x + globalX - pressGlobal.x)
-                    window.y = Math.round(pressWindow.y + globalY - pressGlobal.y)
+                    dragging = true
+                    window.beginTitleDrag(pressPos)
                 }
 
-                onReleased: window.dragging = false
-                onCanceled: window.dragging = false
+                onReleased: dragging = false
+                onCanceled: dragging = false
 
                 onDoubleClicked: function(mouse) {
-                    if (window.dragging)
+                    if (titleDragArea.dragging)
                         return
                     window.toggleMaximize()
                 }
@@ -277,7 +233,7 @@ ApplicationWindow {
 
                 TitleButton {
                     iconKind: 1
-                    restore: window.isMaximized
+                    restore: window.maximized
                     onTriggered: window.toggleMaximize()
                 }
 
@@ -451,163 +407,103 @@ ApplicationWindow {
         }
 
         // ─────────────────────────────────────────────────────────
-        // 八方向缩放热区：手写几何拖拽，不依赖系统 startSystemResize()
+        // 八方向缩放热区：按下后把拖拽交给系统 startSystemResize()，
+        // 由窗口管理器完成真正的缩放，QML 不再推算窗口几何
         // ─────────────────────────────────────────────────────────
         Item {
             id: resizeBorders
 
             anchors.fill: parent
             z: 10000
-            // 最大化时整个缩放热区失效，避免抢占标题栏与内容区的鼠标事件
-            visible: !window.isMaximized
+            // 最大化时没有可拖拽的边，整层隐藏，避免抢占内容区的鼠标事件
+            visible: !window.maximized
 
-            ResizeHandle {
+            ResizeEdge {
                 width: parent.width - 24
                 height: 5
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
-                edgeTop: true
+                edges: Qt.TopEdge
                 cursorShape: Qt.SizeVerCursor
             }
 
-            ResizeHandle {
+            ResizeEdge {
                 width: parent.width - 24
                 height: 5
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
-                edgeBottom: true
+                edges: Qt.BottomEdge
                 cursorShape: Qt.SizeVerCursor
             }
 
-            ResizeHandle {
+            ResizeEdge {
                 width: 5
                 height: parent.height - 24
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.left: parent.left
-                edgeLeft: true
+                edges: Qt.LeftEdge
                 cursorShape: Qt.SizeHorCursor
             }
 
-            ResizeHandle {
+            ResizeEdge {
                 width: 5
                 height: parent.height - 24
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
-                edgeRight: true
+                edges: Qt.RightEdge
                 cursorShape: Qt.SizeHorCursor
             }
 
-            ResizeHandle {
+            ResizeEdge {
                 width: 12
                 height: 12
                 anchors.left: parent.left
                 anchors.top: parent.top
-                edgeLeft: true
-                edgeTop: true
+                edges: Qt.LeftEdge | Qt.TopEdge
                 cursorShape: Qt.SizeFDiagCursor
             }
 
-            ResizeHandle {
+            ResizeEdge {
                 width: 12
                 height: 12
                 anchors.right: parent.right
                 anchors.top: parent.top
-                edgeRight: true
-                edgeTop: true
+                edges: Qt.RightEdge | Qt.TopEdge
                 cursorShape: Qt.SizeBDiagCursor
             }
 
-            ResizeHandle {
+            ResizeEdge {
                 width: 12
                 height: 12
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
-                edgeLeft: true
-                edgeBottom: true
+                edges: Qt.LeftEdge | Qt.BottomEdge
                 cursorShape: Qt.SizeBDiagCursor
             }
 
-            ResizeHandle {
+            ResizeEdge {
                 width: 12
                 height: 12
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                edgeRight: true
-                edgeBottom: true
+                edges: Qt.RightEdge | Qt.BottomEdge
                 cursorShape: Qt.SizeFDiagCursor
             }
         }
     }
 
     // ═════════════════════════════════════════════════════════════
-    // 手写缩放：按下时记录窗口几何，拖动时把指针位移换算成四边变化
+    // 原生缩放手柄：只把鼠标按下转交给系统缩放循环
     // ═════════════════════════════════════════════════════════════
-    component ResizeHandle: MouseArea {
+    component ResizeEdge: MouseArea {
         id: handle
 
-        property bool edgeLeft: false
-        property bool edgeRight: false
-        property bool edgeTop: false
-        property bool edgeBottom: false
-
-        property point pressGlobal
-        property rect startGeometry
+        property int edges: 0
 
         hoverEnabled: true
-        enabled: !window.isMaximized
+        acceptedButtons: Qt.LeftButton
 
-        onPressed: function(mouse) {
-            pressGlobal = Qt.point(window.x + mouse.x, window.y + mouse.y)
-            startGeometry = Qt.rect(window.x, window.y, window.width, window.height)
-            window.resizing = true
-        }
-
-        onPositionChanged: function(mouse) {
-            if (!pressed)
-                return
-
-            // 指针的屏幕坐标：窗口移动后 mouse 会随之变化，加回窗口坐标才是真实位置
-            var dx = (window.x + mouse.x) - pressGlobal.x
-            var dy = (window.y + mouse.y) - pressGlobal.y
-
-            var nextX = startGeometry.x
-            var nextY = startGeometry.y
-            var nextWidth = startGeometry.width
-            var nextHeight = startGeometry.height
-
-            if (handle.edgeLeft) {
-                nextX = startGeometry.x + dx
-                nextWidth = startGeometry.width - dx
-            } else if (handle.edgeRight) {
-                nextWidth = startGeometry.width + dx
-            }
-
-            if (handle.edgeTop) {
-                nextY = startGeometry.y + dy
-                nextHeight = startGeometry.height - dy
-            } else if (handle.edgeBottom) {
-                nextHeight = startGeometry.height + dy
-            }
-
-            if (nextWidth < window.minimumWidth) {
-                nextWidth = window.minimumWidth
-                if (handle.edgeLeft)
-                    nextX = startGeometry.x + startGeometry.width - nextWidth
-            }
-            if (nextHeight < window.minimumHeight) {
-                nextHeight = window.minimumHeight
-                if (handle.edgeTop)
-                    nextY = startGeometry.y + startGeometry.height - nextHeight
-            }
-
-            window.x = Math.round(nextX)
-            window.y = Math.round(nextY)
-            window.width = Math.round(nextWidth)
-            window.height = Math.round(nextHeight)
-        }
-
-        onReleased: window.resizing = false
-        onCanceled: window.resizing = false
+        onPressed: window.startSystemResize(handle.edges)
     }
 
     // ═════════════════════════════════════════════════════════════
@@ -616,10 +512,7 @@ ApplicationWindow {
     ResultCard {
         id: resultCard
 
-        x: 0
-        y: 0
-        width: window.width
-        height: window.height
+        anchors.fill: windowPanel
         z: 95000
 
         onOpenedChanged: window.resultOpen = opened
@@ -638,10 +531,7 @@ ApplicationWindow {
     Item {
         id: splashScreen
 
-        x: 0
-        y: 0
-        width: window.width
-        height: window.height
+        anchors.fill: windowPanel
         z: 100000
         visible: true
         opacity: 1.0
@@ -649,7 +539,7 @@ ApplicationWindow {
         Rectangle {
             id: splashBackground
             anchors.fill: parent
-            radius: window.isMaximized ? 0 : Theme.radiusWindow
+            radius: window.maximized ? 0 : Theme.radiusWindow
             color: "#FAFBFC"
             clip: true
 
@@ -920,8 +810,23 @@ ApplicationWindow {
             to: 0.0
             duration: 460
             easing.type: Easing.OutCubic
-            onFinished: splashScreen.visible = false
+
+            onFinished: {
+                splashScreen.visible = false
+                if (window.welcomeRequested)
+                    window.openWelcome()
+            }
         }
+    }
+
+    // ═════════════════════════════════════════════════════════════
+    // 首次启动欢迎弹窗：显示后写入 first_run.flag，此后不再出现
+    // ═════════════════════════════════════════════════════════════
+    WelcomeDialog {
+        id: welcomeDialog
+
+        anchors.fill: windowPanel
+        z: 99000
     }
 
     // ═════════════════════════════════════════════════════════════

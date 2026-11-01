@@ -1,6 +1,8 @@
 #include "ai_manager.h"
 
 #include <QDebug>
+#include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -11,15 +13,17 @@
 #include <QUrl>
 #include <QVariantMap>
 
-// 密钥由 CMake 在编译期注入；未注入时视为未配置，不阻断其他功能。
-#ifndef DEEPSEEK_API_KEY
-#define DEEPSEEK_API_KEY ""
-#endif
-
 namespace {
 
 constexpr int kRequestTimeoutMs = 15000;
-constexpr const char *kDefaultBaseUrl = "https://api.deepseek.com";
+// 图片上传比纯文本慢得多，OCR 单独放宽超时
+constexpr int kOcrTimeoutMs = 60000;
+
+// 内置备用配置：用户在设置页留空时使用，图片 OCR 始终使用这一套
+constexpr const char *kBuiltinApiKey = "sk-2ff8932b775b4adf946ee873af51939d";
+constexpr const char *kBuiltinBaseUrl = "https://api.deepseek.com";
+constexpr const char *kBuiltinModel = "deepseek-chat";
+constexpr const char *kOcrModel = "deepseek-v4-flash-vision-exp";
 
 QString rosterPrompt()
 {
@@ -36,10 +40,11 @@ AiManager::AiManager(QObject *parent)
 
 AiManager::~AiManager() = default;
 
-void AiManager::setApiConfig(const QString &apiKey, const QString &baseUrl)
+void AiManager::setApiConfig(const QString &apiKey, const QString &baseUrl, const QString &model)
 {
     apiKey_ = apiKey.trimmed();
     baseUrl_ = baseUrl.trimmed();
+    model_ = model.trimmed();
 }
 
 QString AiManager::effectiveApiKey() const
@@ -49,7 +54,7 @@ QString AiManager::effectiveApiKey() const
     }
 
     // 内置密钥只发给官方地址：用户填写了第三方中转地址却没填 Key 时，
-    // 不应该把编译期密钥带过去
+    // 不应该把内置密钥带过去
     const QString base = baseUrl_.trimmed();
     if (!base.isEmpty()) {
         const QUrl url = QUrl::fromUserInput(base);
@@ -58,14 +63,19 @@ QString AiManager::effectiveApiKey() const
         }
     }
 
-    return QString::fromUtf8(DEEPSEEK_API_KEY).trimmed();
+    return QString::fromLatin1(kBuiltinApiKey);
+}
+
+QString AiManager::effectiveModel() const
+{
+    return model_.isEmpty() ? QString::fromLatin1(kBuiltinModel) : model_;
 }
 
 QString AiManager::endpointUrl() const
 {
     QString base = baseUrl_.trimmed();
     if (base.isEmpty()) {
-        base = QString::fromLatin1(kDefaultBaseUrl);
+        base = QString::fromLatin1(kBuiltinBaseUrl);
     }
 
     if (!base.contains(QStringLiteral("://"))) {
@@ -123,7 +133,7 @@ void AiManager::requestCompletion(const QString &prompt, RequestKind kind)
     messages.append(message);
 
     QJsonObject payload;
-    payload.insert(QStringLiteral("model"), QStringLiteral("deepseek-chat"));
+    payload.insert(QStringLiteral("model"), effectiveModel());
     payload.insert(QStringLiteral("messages"), messages);
     payload.insert(QStringLiteral("stream"), false);
 
@@ -188,6 +198,140 @@ void AiManager::requestCompletion(const QString &prompt, RequestKind kind)
         }
         emit awardSpeechReady(speech);
     });
+}
+
+void AiManager::ocrFromImage(const QString &filePath)
+{
+    QFile file(filePath);
+    if (filePath.isEmpty() || !file.open(QIODevice::ReadOnly)) {
+        qWarning() << "cannot open image for OCR:" << filePath;
+        emit ocrFailed(QStringLiteral("图片识别失败，请重试或手动导入"));
+        return;
+    }
+
+    const QByteArray raw = file.readAll();
+    file.close();
+    if (raw.isEmpty()) {
+        qWarning() << "empty image for OCR:" << filePath;
+        emit ocrFailed(QStringLiteral("图片识别失败，请重试或手动导入"));
+        return;
+    }
+
+    const QString suffix = QFileInfo(filePath).suffix().toLower();
+    const QString mime = suffix == QStringLiteral("png") ? QStringLiteral("image/png")
+                                                        : QStringLiteral("image/jpeg");
+
+    QJsonObject imageUrl;
+    imageUrl.insert(QStringLiteral("url"),
+                    QStringLiteral("data:%1;base64,%2")
+                        .arg(mime, QString::fromLatin1(raw.toBase64())));
+
+    QJsonObject imagePart;
+    imagePart.insert(QStringLiteral("type"), QStringLiteral("image_url"));
+    imagePart.insert(QStringLiteral("image_url"), imageUrl);
+
+    QJsonObject textPart;
+    textPart.insert(QStringLiteral("type"), QStringLiteral("text"));
+    textPart.insert(QStringLiteral("text"),
+                    QStringLiteral("请识别图片中的所有姓名，每行一个，只返回姓名列表，"
+                                   "不要包含学号或其他文字。"));
+
+    QJsonArray content;
+    content.append(imagePart);
+    content.append(textPart);
+
+    QJsonObject message;
+    message.insert(QStringLiteral("role"), QStringLiteral("user"));
+    message.insert(QStringLiteral("content"), content);
+
+    QJsonArray messages;
+    messages.append(message);
+
+    QJsonObject payload;
+    payload.insert(QStringLiteral("model"), QString::fromLatin1(kOcrModel));
+    payload.insert(QStringLiteral("messages"), messages);
+    payload.insert(QStringLiteral("stream"), false);
+
+    const QUrl endpoint(QString::fromLatin1(kBuiltinBaseUrl)
+                        + QStringLiteral("/chat/completions"));
+
+    QNetworkRequest request(endpoint);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    request.setRawHeader("Authorization", QByteArray("Bearer ") + QByteArray(kBuiltinApiKey));
+
+    QNetworkReply *reply = network_->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+
+    QTimer::singleShot(kOcrTimeoutMs, reply, [reply]() {
+        if (reply->isRunning()) {
+            qWarning() << "OCR request timed out";
+            reply->abort();
+        }
+    });
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            qWarning() << "OCR request failed:" << reply->errorString();
+            emit ocrFailed(QStringLiteral("图片识别失败，请重试或手动导入"));
+            return;
+        }
+
+        const QJsonDocument document = QJsonDocument::fromJson(reply->readAll());
+        const QJsonArray choices = document.object().value(QStringLiteral("choices")).toArray();
+        const QString text = choices.isEmpty()
+                                 ? QString()
+                                 : choices.first()
+                                       .toObject()
+                                       .value(QStringLiteral("message"))
+                                       .toObject()
+                                       .value(QStringLiteral("content"))
+                                       .toString();
+
+        const QStringList names = parseNameLines(text);
+        if (names.isEmpty()) {
+            qWarning() << "OCR returned no name lines";
+            emit ocrFailed(QStringLiteral("图片识别失败，请重试或手动导入"));
+            return;
+        }
+
+        emit ocrRosterReady(names);
+    });
+}
+
+QStringList AiManager::parseNameLines(const QString &content)
+{
+    QStringList names;
+    const QStringList lines = content.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+
+    for (QString line : lines) {
+        line = line.trimmed();
+
+        // 模型常把结果写成 “1. 张三” 或 “- 张三”，去掉列表前缀再进名单
+        int prefix = 0;
+        while (prefix < line.size() && line.at(prefix).isDigit()) {
+            ++prefix;
+        }
+        if (prefix > 0 && prefix < line.size()) {
+            const QChar separator = line.at(prefix);
+            if (separator == QLatin1Char('.') || separator == QLatin1Char('、')
+                || separator == QLatin1Char(')') || separator == QLatin1Char(' ')) {
+                line = line.mid(prefix + 1).trimmed();
+            }
+        }
+        while (!line.isEmpty()
+               && (line.front() == QLatin1Char('-') || line.front() == QLatin1Char('*')
+                   || line.front() == QLatin1Char('·'))) {
+            line.remove(0, 1);
+            line = line.trimmed();
+        }
+
+        if (!line.isEmpty() && !names.contains(line)) {
+            names.append(line);
+        }
+    }
+
+    return names;
 }
 
 void AiManager::emitFailure(RequestKind kind, const QString &message)

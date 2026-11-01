@@ -93,7 +93,7 @@ BackendBridge::BackendBridge(QObject *parent)
             });
 
     loadState();
-    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_);
+    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_, aiModel_);
 }
 
 void BackendBridge::loadState()
@@ -274,6 +274,31 @@ void BackendBridge::openRosterFileDialog()
 
     // 解析在后台线程完成，结束后由 rosterUpdated 通知界面刷新
     startRosterParse(filePath, false);
+}
+
+QString BackendBridge::chooseRosterImagePath()
+{
+    return QFileDialog::getOpenFileName(nullptr, QStringLiteral("选择名单图片"), QString(),
+                                        QStringLiteral("图片文件 (*.png *.jpg *.jpeg)"));
+}
+
+void BackendBridge::importRosterFromNames(const QStringList &names)
+{
+    roster_->clear();
+    for (const QString &raw : names) {
+        const QString name = raw.trimmed();
+        if (name.isEmpty()) {
+            continue;
+        }
+
+        xieqian::core::Participant participant;
+        participant.name = name.toStdString();
+        roster_->add(std::move(participant));
+    }
+
+    drawEngine_->clearDrawnHistory();
+    saveState();
+    emit rosterUpdated();
 }
 
 void BackendBridge::mockImportCsv()
@@ -521,9 +546,11 @@ void BackendBridge::clearAllData()
     history_.clear();
     customWheels_.clear();
     activeWheelName_.clear();
+    lastSelectedWheel_.clear();
     aiApiKey_.clear();
     aiBaseUrl_.clear();
-    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_);
+    aiModel_.clear();
+    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_, aiModel_);
     drawEngine_->clearDrawnHistory();
 
     saveState();
@@ -533,11 +560,12 @@ void BackendBridge::clearAllData()
     emit aiConfigChanged();
 }
 
-void BackendBridge::saveAIConfig(const QString &apiKey, const QString &baseUrl)
+void BackendBridge::saveAIConfig(const QString &apiKey, const QString &baseUrl, const QString &model)
 {
     aiApiKey_ = apiKey.trimmed();
     aiBaseUrl_ = baseUrl.trimmed();
-    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_);
+    aiModel_ = model.trimmed();
+    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_, aiModel_);
     saveState();
     emit aiConfigChanged();
 }
@@ -547,7 +575,43 @@ QVariantMap BackendBridge::getAIConfig()
     QVariantMap config;
     config.insert(QStringLiteral("apiKey"), aiApiKey_);
     config.insert(QStringLiteral("baseUrl"), aiBaseUrl_);
+    config.insert(QStringLiteral("model"), aiModel_);
     return config;
+}
+
+QString BackendBridge::lastSelectedWheel() const
+{
+    return lastSelectedWheel_;
+}
+
+void BackendBridge::setLastSelectedWheel(const QString &name)
+{
+    const QString key = name.trimmed();
+    if (lastSelectedWheel_ == key) {
+        return;
+    }
+
+    lastSelectedWheel_ = key;
+    saveState();
+}
+
+bool BackendBridge::isFirstRun() const
+{
+    return !QFile::exists(firstRunFlagPath());
+}
+
+void BackendBridge::markFirstRunSeen()
+{
+    const QString path = firstRunFlagPath();
+    QDir().mkpath(QFileInfo(path).absolutePath());
+
+    QFile file(path);
+    if (file.open(QIODevice::WriteOnly)) {
+        file.close();
+        return;
+    }
+
+    qWarning() << "cannot create first run flag:" << path;
 }
 
 int BackendBridge::currentDrawMode() const
@@ -653,6 +717,12 @@ QString BackendBridge::dataFilePath()
         .filePath(QStringLiteral("data.json"));
 }
 
+QString BackendBridge::firstRunFlagPath()
+{
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+        .filePath(QStringLiteral("first_run.flag"));
+}
+
 QJsonObject BackendBridge::stateToJson() const
 {
     QJsonArray roster;
@@ -684,13 +754,18 @@ QJsonObject BackendBridge::stateToJson() const
         customWheels.append(entry);
     }
 
+    QJsonObject aiConfig;
+    aiConfig.insert(QStringLiteral("apiKey"), aiApiKey_);
+    aiConfig.insert(QStringLiteral("baseUrl"), aiBaseUrl_);
+    aiConfig.insert(QStringLiteral("model"), aiModel_);
+
     QJsonObject root;
     root.insert(QStringLiteral("roster"), roster);
     root.insert(QStringLiteral("history"), history);
     root.insert(QStringLiteral("customWheels"), customWheels);
     root.insert(QStringLiteral("activeWheel"), activeWheelName_);
-    root.insert(QStringLiteral("aiApiKey"), aiApiKey_);
-    root.insert(QStringLiteral("aiBaseUrl"), aiBaseUrl_);
+    root.insert(QStringLiteral("lastSelectedWheel"), lastSelectedWheel_);
+    root.insert(QStringLiteral("aiConfig"), aiConfig);
     root.insert(QStringLiteral("soundEnabled"), soundEnabled_);
     root.insert(QStringLiteral("motionEnabled"), motionEnabled_);
     return root;
@@ -755,9 +830,21 @@ void BackendBridge::applyData(const QJsonObject &root)
         activeWheelName_ = customWheels_.empty() ? QString() : customWheels_.back().name;
     }
 
-    aiApiKey_ = root.value(QStringLiteral("aiApiKey")).toString().trimmed();
-    aiBaseUrl_ = root.value(QStringLiteral("aiBaseUrl")).toString().trimmed();
-    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_);
+    aiApiKey_ = root.value(QStringLiteral("aiConfig")).toObject()
+                    .value(QStringLiteral("apiKey")).toString().trimmed();
+    aiBaseUrl_ = root.value(QStringLiteral("aiConfig")).toObject()
+                     .value(QStringLiteral("baseUrl")).toString().trimmed();
+    aiModel_ = root.value(QStringLiteral("aiConfig")).toObject()
+                   .value(QStringLiteral("model")).toString().trimmed();
+
+    // 1.0.7.9 及更早把 AI 配置平铺在根节点，升级后仍能读回已保存的密钥
+    if (aiApiKey_.isEmpty() && aiBaseUrl_.isEmpty()) {
+        aiApiKey_ = root.value(QStringLiteral("aiApiKey")).toString().trimmed();
+        aiBaseUrl_ = root.value(QStringLiteral("aiBaseUrl")).toString().trimmed();
+    }
+    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_, aiModel_);
+
+    lastSelectedWheel_ = root.value(QStringLiteral("lastSelectedWheel")).toString().trimmed();
 
     soundEnabled_ = root.value(QStringLiteral("soundEnabled")).toBool(true);
     motionEnabled_ = root.value(QStringLiteral("motionEnabled")).toBool(true);

@@ -51,12 +51,18 @@ public:
     Q_INVOKABLE bool saveCustomWheel(const QString &name, const QVariantList &options);
     Q_INVOKABLE bool removeCustomWheel(const QString &name);
     Q_INVOKABLE QVariantMap getCustomWheel();
+    Q_INVOKABLE QString lastSelectedWheel() const;
+    Q_INVOKABLE void setLastSelectedWheel(const QString &name);
     Q_INVOKABLE void resetDrawnHistory();
     Q_INVOKABLE QVariantList getHistory();
     Q_INVOKABLE void clearHistory();
     Q_INVOKABLE void clearAllData();
-    Q_INVOKABLE void saveAIConfig(const QString &apiKey, const QString &baseUrl);
+    Q_INVOKABLE void saveAIConfig(const QString &apiKey, const QString &baseUrl, const QString &model);
     Q_INVOKABLE QVariantMap getAIConfig();
+    Q_INVOKABLE bool isFirstRun() const;
+    Q_INVOKABLE void markFirstRunSeen();
+    Q_INVOKABLE QString chooseRosterImagePath();
+    Q_INVOKABLE void importRosterFromNames(const QStringList &names);
     Q_INVOKABLE QString chooseBackupPath();
     Q_INVOKABLE QString chooseRestorePath();
     Q_INVOKABLE void exportData(const QString &filePath);
@@ -114,6 +120,7 @@ private:
     void startRosterParse(const QString &filePath, bool removeFileAfterParse);
     void setRosterLoading(bool loading);
     [[nodiscard]] static QString dataFilePath();
+    [[nodiscard]] static QString firstRunFlagPath();
 
     std::shared_ptr<xieqian::core::Roster> roster_;
     std::unique_ptr<xieqian::core::DrawEngine> drawEngine_;
@@ -121,8 +128,10 @@ private:
     std::vector<HistoryEntry> history_;
     std::vector<CustomWheel> customWheels_;
     QString activeWheelName_;
+    QString lastSelectedWheel_;
     QString aiApiKey_;
     QString aiBaseUrl_;
+    QString aiModel_;
     DrawMode currentDrawMode_ = DrawMode::Wheel;
     int drawCount_ = 1;
     xieqian::core::DrawStrategy drawStrategy_ = xieqian::core::DrawStrategy::Random;

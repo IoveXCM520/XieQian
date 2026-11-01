@@ -23,6 +23,7 @@
 
         <file>qml/components/WheelItem.qml</file>
         <file>qml/components/ResultCard.qml</file>
+        <file>qml/components/WelcomeDialog.qml</file>
         <file>qml/components/CardShadow.qml</file>
         <file>qml/components/CardShadowBehind.qml</file>
 

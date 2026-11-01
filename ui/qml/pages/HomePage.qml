@@ -80,14 +80,17 @@ Item {
     function selectWheel(index) {
         if (index <= 0 || index >= wheelChoices.length) {
             wheelKey = ""
+            backendBridge.setLastSelectedWheel("")
             return
         }
         wheelKey = wheelChoices[index].name
+        backendBridge.setLastSelectedWheel(wheelKey)
     }
 
     function activateWheel(name) {
         // 名字先记下，列表刷新后 selectedWheel 会自动命中；已删除的名字则回落到默认转盘
         wheelKey = String(name)
+        backendBridge.setLastSelectedWheel(wheelKey)
     }
 
     function optionIndexOf(name) {
@@ -111,8 +114,10 @@ Item {
         if (name.length === 0)
             return
 
-        if (backendBridge.removeCustomWheel(name) && wheelKey === name)
+        if (backendBridge.removeCustomWheel(name) && wheelKey === name) {
             wheelKey = ""
+            backendBridge.setLastSelectedWheel("")
+        }
     }
 
     function startDraw() {
@@ -227,9 +232,9 @@ Item {
     Component.onCompleted: {
         refreshRosterOptions()
 
-        var saved = backendBridge.getCustomWheel()
-        if (saved && saved.name !== undefined && String(saved.name).length > 0)
-            activateWheel(String(saved.name))
+        var saved = backendBridge.lastSelectedWheel()
+        if (saved !== undefined && saved !== null && String(saved).length > 0)
+            activateWheel(String(saved))
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -709,8 +714,10 @@ Item {
         }
 
         function onCustomWheelsChanged() {
-            if (page.wheelKey.length > 0 && page.selectedWheel === 0)
+            if (page.wheelKey.length > 0 && page.selectedWheel === 0) {
                 page.wheelKey = ""
+                backendBridge.setLastSelectedWheel("")
+            }
         }
     }
 

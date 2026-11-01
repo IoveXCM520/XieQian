@@ -18,6 +18,8 @@ Item {
     property var participants: []
     property string removeTargetId: ""
     property string removeTargetName: ""
+    property bool ocrBusy: false
+    property string ocrError: ""
 
     readonly property bool loading: backendBridge.rosterLoading
     readonly property int totalCount: backendBridge.rosterCount
@@ -73,6 +75,18 @@ Item {
         removeDialog.open()
     }
 
+    function startImageImport() {
+        if (ocrBusy)
+            return
+
+        var path = backendBridge.chooseRosterImagePath()
+        if (!path || path.length === 0)
+            return
+
+        ocrBusy = true
+        backendBridge.aiManager.ocrFromImage(path)
+    }
+
     Component.onCompleted: refresh()
 
     Connections {
@@ -89,6 +103,21 @@ Item {
         function onRosterLoadingChanged() {
             if (!backendBridge.rosterLoading)
                 page.refresh()
+        }
+    }
+
+    Connections {
+        target: backendBridge.aiManager
+
+        function onOcrRosterReady(names) {
+            page.ocrBusy = false
+            backendBridge.importRosterFromNames(names)
+        }
+
+        function onOcrFailed(message) {
+            page.ocrBusy = false
+            page.ocrError = String(message)
+            ocrErrorDialog.open()
         }
     }
 
@@ -182,11 +211,19 @@ Item {
             }
 
             RosterButton {
+                width: 136
+                height: 40
+                text: page.ocrBusy ? "识别中..." : "📷 图片导入"
+                enabled: !page.loading && !page.ocrBusy
+                onClicked: page.startImageImport()
+            }
+
+            RosterButton {
                 width: 130
                 height: 40
                 text: page.loading ? "正在解析…" : "导入名单"
                 primary: true
-                enabled: !page.loading
+                enabled: !page.loading && !page.ocrBusy
                 onClicked: backendBridge.openRosterFileDialog()
             }
         }
@@ -685,6 +722,76 @@ Item {
         }
 
         onAccepted: backendBridge.removeParticipant(page.removeTargetId)
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 图片识别失败提示
+    // ─────────────────────────────────────────────────────────────
+    Dialog {
+        id: ocrErrorDialog
+
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        width: 360
+        padding: 24
+
+        background: Rectangle {
+            radius: Theme.radiusCard
+            color: Theme.surface
+
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: Theme.withAlpha(Theme.textPrimary, 0.18)
+                shadowBlur: 0.65
+                shadowVerticalOffset: 12
+                shadowHorizontalOffset: 0
+                autoPaddingEnabled: true
+            }
+        }
+
+        contentItem: Column {
+            width: 360 - 48
+            spacing: 14
+
+            Text {
+                width: parent.width
+                text: "图片识别失败"
+                color: Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontH2
+                font.weight: Font.DemiBold
+            }
+
+            Text {
+                width: parent.width
+                text: page.ocrError
+                color: Theme.textSecondary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                wrapMode: Text.WordWrap
+            }
+
+            Item {
+                width: parent.width
+                height: 40
+
+                Row {
+                    anchors.right: parent.right
+                    height: parent.height
+                    spacing: 10
+
+                    RosterButton {
+                        width: 100
+                        height: 40
+                        text: "关闭"
+                        primary: true
+                        onClicked: ocrErrorDialog.accept()
+                    }
+                }
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
