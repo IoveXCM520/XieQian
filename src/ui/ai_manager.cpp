@@ -20,15 +20,15 @@ constexpr int kRequestTimeoutMs = 15000;
 // 图片上传比纯文本慢得多，OCR 每一步单独放宽超时
 constexpr int kOcrTimeoutMs = 60000;
 
-// 内置兜底配置：用户在设置页留空时使用，装好即可直接使用 AI。
-// 图片 OCR 使用独立的专用密钥与模型，不受设置页配置影响。
-constexpr const char *kBuiltinApiKey = "sk-2ff8932b775b4adf946ee873af51939d";
-constexpr const char *kBuiltinBaseUrl = "https://api.deepseek.com";
-constexpr const char *kBuiltinModel = "deepseek-flash";
-
+// 图片 OCR 使用独立的专用密钥与模型（内置通道），
+// 与设置页里用户自己的文本 AI 配置完全隔离。
 constexpr const char *kOcrApiKey = "sk-2ff8932b775b4adf946ee873af51939d";
 constexpr const char *kOcrBaseUrl = "https://api.deepseek.com";
 constexpr const char *kOcrModel = "deepseek-flash";
+
+// 文本任务的接口地址与模型只有默认值，密钥必须由用户在设置页提供
+constexpr const char *kTextDefaultBaseUrl = "https://api.deepseek.com";
+constexpr const char *kTextDefaultModel = "deepseek-flash";
 
 QString rosterPrompt()
 {
@@ -173,35 +173,16 @@ void AiManager::setApiConfig(const QString &apiKey, const QString &baseUrl, cons
     model_ = model.trimmed();
 }
 
-QString AiManager::effectiveApiKey() const
-{
-    if (!apiKey_.isEmpty()) {
-        return apiKey_;
-    }
-
-    // 内置密钥只发给官方地址：用户填写了第三方中转地址却没填 Key 时，
-    // 不应该把内置密钥带过去
-    const QString base = baseUrl_.trimmed();
-    if (!base.isEmpty()) {
-        const QUrl url = QUrl::fromUserInput(base);
-        if (url.host().compare(QStringLiteral("api.deepseek.com"), Qt::CaseInsensitive) != 0) {
-            return QString();
-        }
-    }
-
-    return QString::fromLatin1(kBuiltinApiKey);
-}
-
 QString AiManager::effectiveModel() const
 {
-    return model_.isEmpty() ? QString::fromLatin1(kBuiltinModel) : model_;
+    return model_.isEmpty() ? QString::fromLatin1(kTextDefaultModel) : model_;
 }
 
 QString AiManager::endpointUrl() const
 {
     QString base = baseUrl_.trimmed();
     if (base.isEmpty()) {
-        base = QString::fromLatin1(kBuiltinBaseUrl);
+        base = QString::fromLatin1(kTextDefaultBaseUrl);
     }
 
     if (!base.contains(QStringLiteral("://"))) {
@@ -303,9 +284,11 @@ void AiManager::generateFunction(const QString &prompt)
 
 void AiManager::requestCompletion(const QString &prompt, RequestKind kind)
 {
-    const QString key = effectiveApiKey();
+    const QString key = apiKey_.trimmed();
     if (key.isEmpty()) {
-        emitFailure(kind, QStringLiteral("未配置 AI 密钥"));
+        // 文本任务绝不回退内置密钥，也不静默失败：通知界面引导用户去设置页
+        emit textAiKeyMissing();
+        emitFailure(kind, QStringLiteral("请前往设置配置 API Key"));
         return;
     }
 

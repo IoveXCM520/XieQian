@@ -292,7 +292,7 @@ Item {
                                 Text {
                                     id: builtinChipText
                                     anchors.centerIn: parent
-                                    text: "已内置"
+                                    text: "OCR 内置通道"
                                     color: Theme.success
                                     font.family: Theme.fontFamily
                                     font.pixelSize: 10
@@ -324,7 +324,7 @@ Item {
                             Text {
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "可留空"
+                                text: "文本 AI 必填"
                                 color: Theme.textTertiary
                                 font.family: Theme.fontFamily
                                 font.pixelSize: Theme.fontMicro
@@ -338,7 +338,7 @@ Item {
                             height: 44
                             leftPadding: 14
                             rightPadding: 14
-                            placeholderText: "sk-...（不填也能用）"
+                            placeholderText: "sk-..."
                             placeholderTextColor: Theme.textTertiary
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
@@ -704,8 +704,8 @@ Item {
         parent: Overlay.overlay
         anchors.centerIn: parent
         modal: true
-        width: 380
-        padding: 24
+        width: 400
+        padding: 32
 
         background: Rectangle {
             radius: Theme.radiusDialog
@@ -723,33 +723,42 @@ Item {
         }
 
         contentItem: Column {
-            width: 332
-            spacing: 12
+            width: 336
+            spacing: 0
+
+            Item { width: 1; height: 6 }
 
             Text {
                 width: parent.width
                 text: "开发者验证"
+                horizontalAlignment: Text.AlignHCenter
                 color: Theme.textPrimary
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontH2
+                font.pixelSize: Theme.fontH1
                 font.weight: Font.DemiBold
             }
 
+            Item { width: 1; height: 10 }
+
             Text {
                 width: parent.width
-                text: "输入密码后进入权重调校控制台。"
+                text: "输入密码后进入权重调校控制台"
+                horizontalAlignment: Text.AlignHCenter
                 color: Theme.textSecondary
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontBody
+                font.pixelSize: Theme.fontCaption
             }
+
+            Item { width: 1; height: 30 }
 
             TextField {
                 id: passwordField
 
                 width: parent.width
-                height: 44
-                leftPadding: 14
-                rightPadding: 14
+                height: 48
+                leftPadding: 16
+                rightPadding: 16
+                horizontalAlignment: TextInput.AlignHCenter
                 placeholderText: "密码"
                 placeholderTextColor: Theme.textTertiary
                 echoMode: TextInput.Password
@@ -765,46 +774,48 @@ Item {
                     border.width: 1
                     border.color: passwordField.activeFocus
                                   ? Theme.primary
-                                  : Theme.withAlpha(Theme.textPrimary, 0.06)
+                                  : Theme.withAlpha(Theme.textPrimary, 0.08)
                 }
 
                 onAccepted: page.confirmDeveloperPassword()
             }
 
+            Item { width: 1; height: 10 }
+
             Text {
                 width: parent.width
+                height: page.developerError.length > 0 ? implicitHeight : 0
                 visible: page.developerError.length > 0
                 text: page.developerError
+                horizontalAlignment: Text.AlignHCenter
                 color: Theme.danger
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontCaption
             }
 
-            Item {
-                width: parent.width
-                height: 40
+            Item { width: 1; height: 24 }
 
-                Row {
-                    anchors.right: parent.right
-                    height: parent.height
-                    spacing: 10
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 12
 
-                    SettingButton {
-                        width: 92
-                        height: 40
-                        text: "取消"
-                        onClicked: developerDialog.close()
-                    }
+                SettingButton {
+                    width: 116
+                    height: 42
+                    text: "取消"
+                    onClicked: developerDialog.close()
+                }
 
-                    SettingButton {
-                        width: 100
-                        height: 40
-                        text: "进入"
-                        soft: true
-                        onClicked: page.confirmDeveloperPassword()
-                    }
+                SettingButton {
+                    width: 126
+                    height: 42
+                    text: "进入"
+                    soft: true
+                    onClicked: page.confirmDeveloperPassword()
                 }
             }
+
+            Item { width: 1; height: 10 }
         }
     }
 

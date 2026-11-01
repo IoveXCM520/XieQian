@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Particles
 
 import "."
 import "pages"
@@ -12,14 +13,22 @@ ApplicationWindow {
 
     width: 1200
     height: 800
-    minimumWidth: 1000
-    minimumHeight: 680
+    minimumWidth: pipMode ? 240 : 1000
+    minimumHeight: pipMode ? 240 : 680
     visible: true
     title: qsTr("撷签 · 课堂抽签")
     color: "transparent"
-    flags: Qt.Window | Qt.FramelessWindowHint
+    flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint
+           | (pipMode ? Qt.WindowStaysOnTopHint : 0)
     font.family: Theme.fontFamily
     font.pixelSize: Theme.fontBody
+
+    // 画中画：窗口缩成 300×300 置顶悬浮窗，只保留转盘
+    property bool pipMode: false
+    property size pipRestoreSize: Qt.size(1200, 800)
+    // Windows 下边缘缩放由 C++ 命中测试接管，QML 不再绘制热区
+    readonly property bool nativeResizeAvailable: typeof nativeWindowResize !== "undefined"
+                                                  ? nativeWindowResize : false
 
     background: Rectangle {
         color: "transparent"
@@ -87,6 +96,39 @@ ApplicationWindow {
             window.showMaximized()
     }
 
+    function enterPip() {
+        if (pipMode)
+            return
+
+        if (window.maximized)
+            window.showNormal()
+
+        pipRestoreSize = Qt.size(width, height)
+        pipMode = true
+    }
+
+    function exitPip() {
+        if (!pipMode)
+            return
+        pipMode = false
+    }
+
+    onPipModeChanged: {
+        if (pipMode) {
+            width = 300
+            height = 300
+        } else {
+            width = Math.max(minimumWidth, pipRestoreSize.width)
+            height = Math.max(minimumHeight, pipRestoreSize.height)
+        }
+
+        // 改了窗口 flags 后原生窗口会重建，需要重新显示一次
+        Qt.callLater(function() {
+            window.show()
+            window.requestActivate()
+        })
+    }
+
     // 最大化时拖拽标题栏：先还原，再按指针在标题栏中的相对位置摆好窗口，
     // 最后把拖拽交给系统，得到和其他程序一致的“扯下来”手感
     function beginTitleDrag(pressPos) {
@@ -148,6 +190,7 @@ ApplicationWindow {
             height: window.titleBarHeight
             color: Theme.surface
             z: 20
+            visible: !window.pipMode
 
             MouseArea {
                 id: titleDragArea
@@ -262,6 +305,7 @@ ApplicationWindow {
             width: window.sidebarWidth
             color: Theme.surface
             z: 10
+            visible: !window.pipMode
 
             Column {
                 anchors.top: parent.top
@@ -344,6 +388,7 @@ ApplicationWindow {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             clip: true
+            visible: !window.pipMode
 
             Rectangle {
                 anchors.fill: parent
@@ -437,16 +482,85 @@ ApplicationWindow {
         }
 
         // ─────────────────────────────────────────────────────────
-        // 八方向缩放热区：按下后把拖拽交给系统 startSystemResize()，
-        // 由窗口管理器完成真正的缩放，QML 不再推算窗口几何
+        // 画中画悬浮窗：只保留转盘与恢复按钮
+        // ─────────────────────────────────────────────────────────
+        Rectangle {
+            id: pipCard
+
+            anchors.fill: parent
+            anchors.margins: window.maximized ? 0 : 1
+            radius: Theme.radiusWindow
+            color: Theme.surface
+            border.width: 1
+            border.color: Theme.withAlpha(Theme.textPrimary, 0.08)
+            clip: true
+            z: 50
+            visible: window.pipMode
+
+            WheelItem {
+                anchors.fill: parent
+                anchors.margins: 8
+                options: homePage.wheelOptions
+                weights: homePage.wheelWeights
+                showPointer: false
+                motionEnabled: false
+            }
+
+            // 拖动整个悬浮窗
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton
+                onPressed: window.startSystemMove()
+            }
+
+            Item {
+                width: 30
+                height: 30
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.topMargin: 8
+                anchors.rightMargin: 8
+                z: 2
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 15
+                    color: restoreMouse.containsMouse
+                           ? Theme.primarySoft
+                           : Theme.withAlpha(Theme.white, 0.9)
+                    border.width: 1
+                    border.color: Theme.withAlpha(Theme.textPrimary, 0.10)
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "恢复"
+                    color: restoreMouse.containsMouse ? Theme.primary : Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+
+                MouseArea {
+                    id: restoreMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: window.exitPip()
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // 八方向缩放热区：仅在系统不支持原生命中测试时启用，
+        // 且最大化与画中画时彻底隐藏，避免抢鼠标事件
         // ─────────────────────────────────────────────────────────
         Item {
             id: resizeBorders
 
             anchors.fill: parent
             z: 10000
-            // 最大化时没有可拖拽的边，整层隐藏，避免抢占内容区的鼠标事件
-            visible: !window.maximized
+            visible: !window.maximized && !window.pipMode && !window.nativeResizeAvailable
 
             ResizeEdge {
                 width: parent.width - 24
@@ -580,38 +694,11 @@ ApplicationWindow {
             Canvas {
                 id: splashBackdrop
                 anchors.fill: parent
-                z: 1
-
-                // 固定种子生成，窗口缩放时粒子位置不会抽动
-                property var particles: []
-
-                function seedParticles() {
-                    // Lehmer LCG：乘数小于 2^16，乘积不超 2^47，不会丢精度
-                    var seed = 20260301
-                    var list = []
-                    for (var i = 0; i < 56; ++i) {
-                        seed = (seed * 48271) % 2147483647
-                        var x = seed / 2147483647
-                        seed = (seed * 48271) % 2147483647
-                        var y = seed / 2147483647
-                        seed = (seed * 48271) % 2147483647
-                        var radius = 1.2 + (seed / 2147483647) * 2.4
-                        seed = (seed * 48271) % 2147483647
-                        var alpha = 0.08 + (seed / 2147483647) * 0.14
-                        list.push({ "x": x, "y": y, "r": radius,
-                                    "a": alpha, "green": (i % 4 === 0) })
-                    }
-                    particles = list
-                }
-
-                Component.onCompleted: {
-                    seedParticles()
-                    requestPaint()
-                }
+                z: 0
 
                 onWidthChanged: requestPaint()
                 onHeightChanged: requestPaint()
-                onVisibleChanged: if (visible) requestPaint()
+                Component.onCompleted: requestPaint()
 
                 onPaint: {
                     if (width <= 0 || height <= 0)
@@ -630,17 +717,63 @@ ApplicationWindow {
                     glow.addColorStop(1, "rgba(59,139,246,0)")
                     ctx.fillStyle = glow
                     ctx.fillRect(0, 0, width, height)
-
-                    for (var i = 0; i < particles.length; ++i) {
-                        var p = particles[i]
-                        ctx.beginPath()
-                        ctx.arc(p.x * width, p.y * height, p.r, 0, Math.PI * 2)
-                        ctx.fillStyle = p.green
-                                        ? "rgba(46,212,165," + p.a + ")"
-                                        : "rgba(59,139,246," + p.a + ")"
-                        ctx.fill()
-                    }
                 }
+            }
+
+            // 从底部向上漂浮的星尘：ImageParticle 自带淡入淡出
+            ParticleSystem {
+                id: splashStars
+
+                anchors.fill: parent
+                z: 1
+                running: splashScreen.visible
+            }
+
+            Emitter {
+                system: splashStars
+                x: 0
+                y: splashBackground.height - 6
+                width: splashBackground.width
+                height: 6
+                shape: RectangleShape { fill: true }
+                emitRate: 16
+                lifeSpan: 7000
+                lifeSpanVariation: 2600
+                size: 9
+                sizeVariation: 7
+                maximumEmitted: 220
+
+                velocity: AngleDirection {
+                    angle: 270
+                    angleVariation: 10
+                    magnitude: 16
+                    magnitudeVariation: 10
+                }
+
+                acceleration: PointDirection {
+                    y: -2
+                    yVariation: 2
+                }
+            }
+
+            ImageParticle {
+                system: splashStars
+                source: "qrc:///particleresources/star.png"
+                color: "#9CCBFF"
+                colorVariation: 0.12
+                alpha: 0.72
+                alphaVariation: 0.35
+                entryEffect: ImageParticle.Fade
+                rotationVariation: 180
+                rotationVelocityVariation: 22
+            }
+
+            // 微弱横向漂移，避免星点走直线太死板
+            Wander {
+                system: splashStars
+                xVariance: 44
+                yVariance: 22
+                pace: 700
             }
 
             Column {

@@ -19,6 +19,7 @@ Item {
     // 空字符串表示默认名单转盘，其余为持久化的自定义转盘名
     property string wheelKey: ""
     property var rosterOptions: []
+    property var rosterWeights: []
     property int pendingIndex: -1
     property string deleteTargetName: ""
 
@@ -52,6 +53,8 @@ Item {
     readonly property var wheelOptions: customWheel
                                         ? wheelChoices[selectedWheel].options
                                         : rosterOptions
+    // 默认转盘按名单权重分配扇区；自定义转盘的选项没有权重，均分
+    readonly property var wheelWeights: customWheel ? [] : rosterWeights
 
     property bool busy: false
     // 抽奖全程锁：点击开始到结果弹窗关闭之间为 true，供 Main 禁用导航与重复点击
@@ -77,12 +80,17 @@ Item {
 
     function refreshRosterOptions() {
         var list = []
+        var weights = []
         var participants = backendBridge.getParticipantsWithStatus()
         for (var i = 0; i < participants.length; ++i) {
-            if (participants[i].enabled)
+            if (participants[i].enabled) {
                 list.push(String(participants[i].name))
+                var weight = Number(participants[i].weight)
+                weights.push(isFinite(weight) && weight > 0 ? weight : 1)
+            }
         }
         rosterOptions = list
+        rosterWeights = weights
     }
 
     function selectWheel(index) {
@@ -221,12 +229,23 @@ Item {
         pendingIndex = -1
         safetyTimer.stop()
 
+        // 自定义转盘在前端随机，后端不知道结果，这里补齐历史记录
+        if (customWheel) {
+            for (var i = 0; i < lastWinners.length; ++i)
+                backendBridge.appendHistory(lastWinners[i])
+        }
+
         if (lastWinners.length > 0 && Window.window
                 && typeof Window.window.showResult === "function") {
             Window.window.showResult(lastWinners)
         } else {
             drawLock = false
         }
+    }
+
+    function requestPip() {
+        if (Window.window && typeof Window.window.enterPip === "function")
+            Window.window.enterPip()
     }
 
     function endDrawLock() {
@@ -572,11 +591,29 @@ Item {
                     width: Math.max(0, Math.min(parent.width, parent.height) * 0.96)
                     height: width
                     options: page.wheelOptions
+                    weights: page.wheelWeights
                     showPointer: true
                     motionEnabled: page.animationEnabled
                     onFinished: page.finishDraw()
                 }
             }
+        }
+
+        // 左右两侧的画中画悬浮按钮：点到后窗口缩小成置顶悬浮窗
+        PipButton {
+            anchors.left: stageCard.left
+            anchors.leftMargin: 12
+            anchors.verticalCenter: stageCard.verticalCenter
+            hint: "缩小为悬浮窗"
+            onClicked: page.requestPip()
+        }
+
+        PipButton {
+            anchors.right: stageCard.right
+            anchors.rightMargin: 12
+            anchors.verticalCenter: stageCard.verticalCenter
+            hint: "缩小为悬浮窗"
+            onClicked: page.requestPip()
         }
     }
 
@@ -701,11 +738,74 @@ Item {
         }
 
         function onCustomWheelsChanged() {
-            if (page.wheelKey.length > 0 && page.selectedWheel === 0) {
-                page.wheelKey = ""
-                backendBridge.setLastSelectedWheel("")
+            // 直接按名字校验：转盘列表刚变化时 selectedWheel 可能还是旧值，
+            // 用下标判断会把刚切过去的新转盘误判为已删除
+            if (page.wheelKey.length === 0)
+                return
+
+            var wheels = backendBridge.customWheels
+            for (var i = 0; i < wheels.length; ++i) {
+                if (wheels[i].name === page.wheelKey)
+                    return
+            }
+
+            page.wheelKey = ""
+            backendBridge.setLastSelectedWheel("")
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 画中画按钮
+    // ─────────────────────────────────────────────────────────────
+    component PipButton: Item {
+        id: pipButton
+
+        property string hint: ""
+        signal clicked()
+
+        width: 34
+        height: 34
+        z: 20
+
+        Rectangle {
+            anchors.fill: parent
+            radius: width / 2
+            color: pipMouse.containsMouse
+                   ? Theme.primarySoft
+                   : Theme.withAlpha(Theme.surface, 0.94)
+            border.width: 1
+            border.color: pipMouse.containsMouse
+                          ? Theme.withAlpha(Theme.primary, 0.35)
+                          : Theme.withAlpha(Theme.textPrimary, 0.08)
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
             }
         }
+
+        Text {
+            anchors.centerIn: parent
+            text: "—"
+            color: pipMouse.containsMouse ? Theme.primary : Theme.textSecondary
+            font.family: Theme.fontFamily
+            font.pixelSize: 15
+            font.weight: Font.DemiBold
+        }
+
+        MouseArea {
+            id: pipMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: pipButton.clicked()
+        }
+
+        ToolTip.visible: pipMouse.containsMouse
+        ToolTip.text: pipButton.hint
+        ToolTip.delay: 400
     }
 
     // ─────────────────────────────────────────────────────────────

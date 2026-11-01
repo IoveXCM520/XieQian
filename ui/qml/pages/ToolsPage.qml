@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 
 import ".."
 import "../components/ExpressionParser.js" as Parser
@@ -61,6 +62,8 @@ Item {
 
     // ─── 函数图像状态 ───
     property string plotText: "x = 16sin^3(t), y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)"
+    // 参数方程的参数 t 扫过几整圈：螺旋线、蝴蝶曲线需要多圈才能画完
+    property int plotTurns: 1
     property var plotPaths: []
     property var plotBounds: ({ "xmin": -1.0, "xmax": 1.0, "ymin": -1.0, "ymax": 1.0,
                                 "uniform": true })
@@ -304,7 +307,7 @@ Item {
             }
         }
 
-        var samples = 720
+        var samples = Math.min(3600, 720 * Math.max(1, page.plotTurns))
         var points = []
         var minX = Infinity
         var maxX = -Infinity
@@ -312,7 +315,7 @@ Item {
         var maxY = -Infinity
 
         for (var i = 0; i <= samples; ++i) {
-            var t = 2 * Math.PI * i / samples
+            var t = 2 * Math.PI * Math.max(1, page.plotTurns) * i / samples
             var x = xCompiled.fn({ "t": t })
             var y = yCompiled.fn({ "t": t })
 
@@ -469,8 +472,9 @@ Item {
             computeImplicit(spec)
     }
 
-    function applyPreset(text) {
+    function applyPreset(text, turns) {
         plotText = text
+        plotTurns = turns === undefined || turns === null ? 1 : turns
         plotField.text = text
         drawPlot()
     }
@@ -508,6 +512,12 @@ Item {
             page.aiBusy = false
             page.aiStatus = ""
             page.plotError = String(message)
+        }
+
+        function onTextAiKeyMissing() {
+            page.aiBusy = false
+            page.aiStatus = ""
+            keyDialog.open()
         }
     }
 
@@ -824,11 +834,24 @@ Item {
 
                                 Repeater {
                                     model: [
-                                        { "label": "爱心", "text": "x = 16sin^3(t), y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)" },
-                                        { "label": "方程爱心", "text": "x^2 + (y - (x^2)^(1/3))^2 = 1" },
-                                        { "label": "抛物线", "text": "y = x^2" },
-                                        { "label": "正弦波", "text": "y = sin(x)" },
-                                        { "label": "圆", "text": "x^2 + y^2 = 9" }
+                                        { "label": "爱心", "turns": 1,
+                                          "text": "x = 16sin^3(t), y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)" },
+                                        { "label": "方程爱心", "turns": 1,
+                                          "text": "x^2 + (y - (x^2)^(1/3))^2 = 1" },
+                                        { "label": "玫瑰线", "turns": 1,
+                                          "text": "x = 10cos(3t)cos(t), y = 10cos(3t)sin(t)" },
+                                        { "label": "蝴蝶曲线", "turns": 6,
+                                          "text": "x = sin(t)(exp(cos(t)) - 2cos(4t) - sin(t/12)^5), y = cos(t)(exp(cos(t)) - 2cos(4t) - sin(t/12)^5)" },
+                                        { "label": "阿基米德螺旋线", "turns": 3,
+                                          "text": "x = t cos(t), y = t sin(t)" },
+                                        { "label": "莫比乌斯环", "turns": 2,
+                                          "text": "x = (1 + 0.6cos(t/2))cos(t), y = (1 + 0.6cos(t/2))sin(t) + 0.6sin(t/2)" },
+                                        { "label": "抛物线", "turns": 1,
+                                          "text": "y = x^2" },
+                                        { "label": "正弦波", "turns": 1,
+                                          "text": "y = sin(x)" },
+                                        { "label": "圆", "turns": 1,
+                                          "text": "x^2 + y^2 = 9" }
                                     ]
 
                                     delegate: Rectangle {
@@ -854,7 +877,7 @@ Item {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
-                                            onClicked: page.applyPreset(modelData.text)
+                                            onClicked: page.applyPreset(modelData.text, modelData.turns)
                                         }
                                     }
                                 }
@@ -1119,6 +1142,76 @@ Item {
                             font.family: Theme.fontFamily
                             font.pixelSize: 10
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 文本 AI 未配置密钥：引导去设置页
+    // ─────────────────────────────────────────────────────────────
+    Dialog {
+        id: keyDialog
+
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        width: 400
+        padding: 26
+
+        background: Rectangle {
+            radius: Theme.radiusDialog
+            color: Theme.surface
+            border.width: 1
+            border.color: Theme.withAlpha(Theme.textPrimary, 0.06)
+        }
+
+        contentItem: Column {
+            width: 348
+            spacing: 14
+
+            Text {
+                width: parent.width
+                text: "请前往设置配置 API Key"
+                color: Theme.textPrimary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontH2
+                font.weight: Font.DemiBold
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Text {
+                width: parent.width
+                text: "AI 生成函数使用你在设置页填写的文本 API Key，当前还没有配置。图片识别不占用这个 Key。"
+                color: Theme.textSecondary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+                lineHeight: 1.35
+            }
+
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 10
+
+                ToolAction {
+                    width: 104
+                    height: 40
+                    text: "稍后"
+                    onClicked: keyDialog.close()
+                }
+
+                ToolAction {
+                    width: 124
+                    height: 40
+                    primary: true
+                    text: "前往设置"
+                    onClicked: {
+                        keyDialog.close()
+                        if (Window.window && typeof Window.window.navigate === "function")
+                            Window.window.navigate(6)
                     }
                 }
             }

@@ -41,7 +41,7 @@ cmake --build build --config Release
 ctest -C Release --test-dir build --output-on-failure
 ```
 
-需要 AI 功能时，直接在应用内「设置 → AI 助手配置」填写 API Key、API Base URL 与模型名称即可，配置保存在本地数据文件的 `aiConfig` 字段中。此处的配置用于高级计算器、函数解析与颁奖词生成；图片导入的 AI 识别走内置独立通道，不消耗这里的 Key。
+需要 AI 功能时，直接在应用内「设置 → AI 助手配置」填写 API Key、API Base URL 与模型名称即可，配置保存在本地数据文件的 `aiConfig` 字段中。此处的配置用于高级计算器、函数解析与颁奖词生成，未填写时文本 AI 不会使用任何内置密钥，而是提示前往设置；图片导入与成绩单识别的 AI 走内置独立通道，不消耗这里的 Key。
 
 推送 `v*` 格式的 tag 会触发自动发布，GitHub Release 附带安装包 `XieQian-Setup-<version>.exe` 与免安装压缩包 `XieQian-Windows.zip`。
 

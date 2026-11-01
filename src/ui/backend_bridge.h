@@ -43,6 +43,7 @@ public:
     Q_INVOKABLE int appendNamesToRoster(const QStringList &names);
     Q_INVOKABLE int applyScoreWeights(const QVariantList &entries);
     Q_INVOKABLE void resetDrawStats();
+    Q_INVOKABLE void appendHistory(const QString &name);
     Q_INVOKABLE QVariantList getParticipantsWithStatus();
     Q_INVOKABLE void toggleParticipantStatus(int index);
     Q_INVOKABLE void updateParticipantWeight(const QString &id, double weight);
@@ -112,7 +113,8 @@ private:
 
     void recordDraw(const QString &name);
     void recordWinners(const std::vector<xieqian::core::Participant> &winners);
-    [[nodiscard]] xieqian::core::DrawStrategy effectiveStrategy() const;
+    [[nodiscard]] xieqian::core::DrawStrategy strategyFor(
+        const std::vector<xieqian::core::Participant> &pool) const;
     void applyData(const QJsonObject &root);
     [[nodiscard]] QJsonObject stateToJson() const;
     void saveState() const;

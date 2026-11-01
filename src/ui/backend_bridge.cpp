@@ -104,8 +104,9 @@ void BackendBridge::loadState()
 
 QString BackendBridge::drawWinner()
 {
+    const std::vector<xieqian::core::Participant> pool = roster_->enabledParticipants();
     const std::vector<xieqian::core::Participant> winners =
-        drawEngine_->draw(roster_->enabledParticipants(), 1, effectiveStrategy());
+        drawEngine_->draw(pool, 1, strategyFor(pool));
     if (winners.empty()) {
         return QStringLiteral("无可用名单");
     }
@@ -124,8 +125,9 @@ QVariantList BackendBridge::drawWinners(int count)
         return winners;
     }
 
+    const std::vector<xieqian::core::Participant> pool = roster_->enabledParticipants();
     const std::vector<xieqian::core::Participant> picked =
-        drawEngine_->draw(roster_->enabledParticipants(), count, effectiveStrategy());
+        drawEngine_->draw(pool, count, strategyFor(pool));
     recordWinners(picked);
     for (const xieqian::core::Participant &participant : picked) {
         const QString winner = QString::fromStdString(participant.name);
@@ -140,8 +142,9 @@ QVariantList BackendBridge::drawMultipleWinners()
     QVariantList winners;
     QStringList names;
 
+    const std::vector<xieqian::core::Participant> pool = roster_->enabledParticipants();
     const std::vector<xieqian::core::Participant> picked =
-        drawEngine_->draw(roster_->enabledParticipants(), drawCount_, effectiveStrategy());
+        drawEngine_->draw(pool, drawCount_, strategyFor(pool));
     recordWinners(picked);
     for (const xieqian::core::Participant &participant : picked) {
         const QString name = QString::fromStdString(participant.name);
@@ -509,10 +512,31 @@ void BackendBridge::recordWinners(const std::vector<xieqian::core::Participant> 
     emit rosterUpdated();
 }
 
-xieqian::core::DrawStrategy BackendBridge::effectiveStrategy() const
+xieqian::core::DrawStrategy BackendBridge::strategyFor(
+    const std::vector<xieqian::core::Participant> &pool) const
 {
-    // 动态权重只在加权抽签下有意义，开启后自动接管抽签策略
-    return dynamicWeights_ ? xieqian::core::DrawStrategy::Weighted : drawStrategy_;
+    if (dynamicWeights_ || drawStrategy_ == xieqian::core::DrawStrategy::Weighted) {
+        return xieqian::core::DrawStrategy::Weighted;
+    }
+
+    // 转盘扇区按权重绘制，抽签也必须按权重，否则看到的宽窄和实际概率对不上
+    for (const xieqian::core::Participant &participant : pool) {
+        if (std::abs(participant.weight - 1.0) > 1e-9) {
+            return xieqian::core::DrawStrategy::Weighted;
+        }
+    }
+
+    return drawStrategy_;
+}
+
+void BackendBridge::appendHistory(const QString &name)
+{
+    const QString trimmed = name.trimmed();
+    if (trimmed.isEmpty()) {
+        return;
+    }
+
+    recordDraw(trimmed);
 }
 
 bool BackendBridge::dynamicWeights() const

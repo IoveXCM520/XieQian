@@ -31,7 +31,7 @@ public:
     // 自然语言转函数表达式，结果可直接填进函数图像页
     Q_INVOKABLE void generateFunction(const QString &prompt);
 
-    // 用户配置优先；留空的项回退到内置备用配置。
+    // 用户配置优先；文本任务只使用用户自己的密钥，不会再回退到内置配置。
     void setApiConfig(const QString &apiKey, const QString &baseUrl, const QString &model);
 
 signals:
@@ -40,6 +40,8 @@ signals:
     void awardSpeechReady(const QString &speech);
     void awardSpeechFailed(const QString &message);
     void networkError(const QString &message);
+    // 文本 AI 未配置用户密钥时发出，由界面弹窗引导去设置页
+    void textAiKeyMissing();
     void ocrRosterReady(const QStringList &names);
     void ocrScoresReady(const QVariantList &entries);
     void ocrFailed(const QString &message);
@@ -54,7 +56,6 @@ private:
 
     void requestCompletion(const QString &prompt, RequestKind kind);
     void emitFailure(RequestKind kind, const QString &message);
-    [[nodiscard]] QString effectiveApiKey() const;
     [[nodiscard]] QString effectiveModel() const;
     [[nodiscard]] QString endpointUrl() const;
     [[nodiscard]] static QVariantList parseRoster(const QString &content);

@@ -19,6 +19,8 @@ Item {
 
     // 转盘选项；为空时使用内置的“签运”文案，保证独立预览也有内容
     property var options: []
+    // 与 options 一一对应的权重；缺省或非法值按 1 处理
+    property var weights: []
     property real angle: 0
     property bool spinActive: false
     property bool showPointer: true
@@ -45,20 +47,60 @@ Item {
         return Math.max(1, options.length)
     }
 
+    // 归一化权重：非法、缺失、非正值都按 1 处理，全为 0 时退回等分
+    function weightList() {
+        var count = effectiveCount()
+        var list = []
+        var total = 0
+
+        for (var i = 0; i < count; ++i) {
+            var weight = 1
+            if (wheelRoot.weights && i < wheelRoot.weights.length) {
+                var value = Number(wheelRoot.weights[i])
+                if (isFinite(value) && value > 0)
+                    weight = value
+            }
+            list.push(weight)
+            total += weight
+        }
+
+        if (total <= 0) {
+            for (var j = 0; j < list.length; ++j)
+                list[j] = 1
+            total = list.length
+        }
+
+        return { "weights": list, "total": total }
+    }
+
+    // 扇区中心相对 12 点方向的角度（度），权重扇区不再等分
+    function sectorCenterDegrees(index) {
+        var data = weightList()
+        var count = effectiveCount()
+        var sector = index
+        if (sector === undefined || sector === null || sector < 0 || sector >= count)
+            return 0
+
+        var before = 0
+        for (var i = 0; i < sector; ++i)
+            before += data.weights[i]
+
+        return before / data.total * 360 + data.weights[sector] / data.total * 180
+    }
+
     function startSpin(targetIndex) {
         if (spinAnimation.running)
             return
 
         // 坐标系约定：扇区 0 从 -90°（指针所在的 12 点方向）开始顺时针绘制，
-        // 所以扇区 k 的中心相对 12 点偏移 k*360/N + 180/N 度。
+        // 所以扇区 k 的中心相对 12 点偏移为前面扇区角度之和加半个扇区。
         // 指针固定朝上，盘面需要转过 (360 - 中心角度) 才能让中心对准指针。
         var count = effectiveCount()
-        var stepDegrees = 360 / count
         var sector = targetIndex
         if (sector === undefined || sector < 0 || sector >= count)
             sector = Math.floor(Math.random() * count)
 
-        var centerDegrees = sector * stepDegrees + stepDegrees / 2
+        var centerDegrees = sectorCenterDegrees(sector)
         var targetRotation = (360 - centerDegrees) % 360
         var currentRotation = ((angle % 360) + 360) % 360
         // 归一化到 [0, 360)，每次都在当前角度上继续顺时针转，不会倒转
@@ -72,12 +114,17 @@ Item {
 
         spinActive = true
         spinAnimation.from = angle
-        // 5 整圈 + 精确落点；0.001° 抵消浮点误差，确保停在扇区正中间而非分割线
+        // 5 整圈 + 精确落点；0.001° 抵消浮点误差，确保停在扇区正中而非分割线
         spinAnimation.to = targetAngle
         spinAnimation.start()
     }
 
     onOptionsChanged: {
+        if (sectorCanvas)
+            sectorCanvas.requestPaint()
+    }
+
+    onWeightsChanged: {
         if (sectorCanvas)
             sectorCanvas.requestPaint()
     }
@@ -137,10 +184,21 @@ Item {
                     labels = ["上上签", "好运", "如愿", "惊喜", "欢喜", "顺遂", "圆满", "相逢"]
 
                 var count = labels.length
-                var step = Math.PI * 2 / count
+                var pi2 = Math.PI * 2
                 // 扇区 0 的前缘正好在 12 点（-90°），与顶部指针同一坐标系
                 var start = -Math.PI / 2
-                var pi2 = Math.PI * 2
+
+                // 按权重分配扇区宽度：权重越大扇形越宽
+                var weightData = wheelRoot.weightList()
+                var sectorAngles = []
+                var sectorStarts = []
+                var cursor = 0
+                for (var s = 0; s < count; ++s) {
+                    var sweep = weightData.weights[s] / weightData.total * pi2
+                    sectorStarts.push(start + cursor)
+                    sectorAngles.push(sweep)
+                    cursor += sweep
+                }
 
                 // 高饱和、冷暖交替的现代色盘
                 var palette = [
@@ -160,8 +218,8 @@ Item {
                 var separator = 2
 
                 for (var i = 0; i < count; ++i) {
-                    var a0 = start + i * step
-                    var a1 = a0 + step
+                    var a0 = sectorStarts[i]
+                    var a1 = a0 + sectorAngles[i]
 
                     ctx.beginPath()
                     ctx.moveTo(cx, cy)
@@ -219,49 +277,49 @@ Item {
                 else if (count > 10)
                     fontSize = 12
 
-                // 用文字最内端的圆弧长度反推字号上限，保证相邻扇区文字不会相碰
                 var innerTextRadius = textRadius - textWidth / 2
-                var arcAtInner = innerTextRadius * step
-                var showLabels = arcAtInner >= 11
-                if (showLabels)
-                    fontSize = Math.min(fontSize, Math.max(8, Math.round(arcAtInner * 0.72)))
 
-                ctx.font = "bold " + fontSize + "px sans-serif"
+                for (var j = 0; j < count; ++j) {
+                    // 扇区宽度不足时直接隐藏文字，避免相邻扇区的字叠在一起
+                    var arcAtInner = innerTextRadius * sectorAngles[j]
+                    var sectorDegrees = sectorAngles[j] * 180 / Math.PI
+                    if (arcAtInner < 9 || sectorDegrees < 5)
+                        continue
 
-                if (showLabels) {
-                    for (var j = 0; j < count; ++j) {
-                        var mid = start + (j + 0.5) * step
-                        var flipped = mid > Math.PI / 2 && mid < Math.PI * 1.5
+                    var drawSize = Math.min(fontSize, Math.max(7, Math.round(arcAtInner * 0.72)))
+                    ctx.font = "bold " + drawSize + "px sans-serif"
 
-                        ctx.save()
-                        ctx.translate(cx, cy)
-                        ctx.rotate(mid)
-                        ctx.translate(textRadius, 0)
+                    var mid = sectorStarts[j] + sectorAngles[j] / 2
+                    var flipped = mid > Math.PI / 2 && mid < Math.PI * 1.5
 
-                        // 左半圈翻转 180°，避免文字完全倒置
-                        if (flipped)
-                            ctx.rotate(Math.PI)
+                    ctx.save()
+                    ctx.translate(cx, cy)
+                    ctx.rotate(mid)
+                    ctx.translate(textRadius, 0)
 
-                        ctx.textAlign = "center"
-                        ctx.textBaseline = "middle"
-                        ctx.fillStyle = "#FFFFFF"
-                        ctx.shadowColor = "rgba(15,23,42,0.58)"
-                        ctx.shadowBlur = 3
-                        ctx.shadowOffsetX = 0
-                        ctx.shadowOffsetY = flipped ? -1.4 : 1.4
+                    // 左半圈翻转 180°，避免文字完全倒置
+                    if (flipped)
+                        ctx.rotate(Math.PI)
 
-                        var text = String(labels[j])
-                        if (ctx.measureText(text).width > textWidth) {
-                            var clipped = text
-                            while (clipped.length > 1
-                                   && ctx.measureText(clipped + "…").width > textWidth)
-                                clipped = clipped.substring(0, clipped.length - 1)
-                            text = clipped + "…"
-                        }
+                    ctx.textAlign = "center"
+                    ctx.textBaseline = "middle"
+                    ctx.fillStyle = "#FFFFFF"
+                    ctx.shadowColor = "rgba(15,23,42,0.58)"
+                    ctx.shadowBlur = 3
+                    ctx.shadowOffsetX = 0
+                    ctx.shadowOffsetY = flipped ? -1.4 : 1.4
 
-                        ctx.fillText(text, 0, 0)
-                        ctx.restore()
+                    var text = String(labels[j])
+                    if (ctx.measureText(text).width > textWidth) {
+                        var clipped = text
+                        while (clipped.length > 1
+                               && ctx.measureText(clipped + "…").width > textWidth)
+                            clipped = clipped.substring(0, clipped.length - 1)
+                        text = clipped + "…"
                     }
+
+                    ctx.fillText(text, 0, 0)
+                    ctx.restore()
                 }
             }
         }

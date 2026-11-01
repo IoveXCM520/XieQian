@@ -296,18 +296,83 @@ function evaluateNode(node, variables) {
 
 // 返回 { ok, value, error }，供计算器直接使用
 function evaluate(text, variables) {
-    var parsed = parse(text)
+    var source = String(text)
+    var parsed = parse(source)
+    var repaired = false
+
+    if (!parsed.ok) {
+        // 半截表达式（5+、sin(、((5）自动补齐后再试一次，不直接报错
+        var patched = repair(source)
+        if (patched.length > 0 && patched !== source) {
+            var patchedResult = parse(patched)
+            if (patchedResult.ok) {
+                parsed = patchedResult
+                repaired = true
+            }
+        }
+    }
+
     if (!parsed.ok)
-        return { ok: false, value: NaN, error: parsed.error }
+        return { ok: false, value: NaN, error: parsed.error, repaired: false }
 
     try {
         var value = evaluateNode(parsed.root, variables ? variables : {})
         if (typeof value !== "number" || isNaN(value))
-            return { ok: false, value: NaN, error: "无法计算该表达式" }
-        return { ok: true, value: value, error: "" }
+            return { ok: false, value: NaN, error: "无法计算该表达式", repaired: repaired }
+        return { ok: true, value: value, error: "", repaired: repaired }
     } catch (error) {
-        return { ok: false, value: NaN, error: error.message }
+        return { ok: false, value: NaN, error: error.message, repaired: repaired }
     }
+}
+
+// 把残缺的表达式补成能算的形式：删掉末尾悬空运算符、补齐括号、空括号填 0
+function repair(text) {
+    var source = normalize(String(text)).trim()
+    if (source.length === 0)
+        return source
+
+    var dangling = "+-*/^%.,"
+    while (source.length > 0 && dangling.indexOf(source.charAt(source.length - 1)) >= 0)
+        source = source.substring(0, source.length - 1).trim()
+
+    if (source.length === 0)
+        return source
+
+    var opens = 0
+    var closes = 0
+    for (var i = 0; i < source.length; ++i) {
+        if (source.charAt(i) === "(")
+            ++opens
+        else if (source.charAt(i) === ")")
+            ++closes
+    }
+
+    // 多余的右括号直接丢掉，缺的左括号稍后补齐
+    while (closes > opens && source.charAt(source.length - 1) === ")") {
+        source = source.substring(0, source.length - 1)
+        --closes
+    }
+
+    if (source.length === 0)
+        return source
+
+    if (source.charAt(source.length - 1) === "(")
+        source += "0"
+
+    var missing = 0
+    for (var j = 0; j < source.length; ++j) {
+        if (source.charAt(j) === "(")
+            ++missing
+        else if (source.charAt(j) === ")")
+            --missing
+    }
+    while (missing > 0) {
+        source += ")"
+        --missing
+    }
+
+    // sin() / () 里的空参数视为 0
+    return source.replace(/\(\s*\)/g, "(0)")
 }
 
 // 把树转成可反复调用的求值函数，绘图时避免重复解析
