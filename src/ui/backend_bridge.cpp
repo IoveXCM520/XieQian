@@ -6,6 +6,7 @@
 #include <string>
 #include <utility>
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
@@ -16,8 +17,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QRunnable>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QVariantMap>
 
 #include "xieqian/core/io/file_parser.h"
@@ -26,6 +29,11 @@ namespace {
 
 constexpr int kMinDrawCount = 1;
 constexpr int kMaxDrawCount = 10;
+// 与开发者页输入框的上下限一致
+constexpr double kMinWeight = 0.1;
+constexpr double kMaxWeight = 1000.0;
+// 成绩单调权时，没出现在成绩单上的人统一落到最低档
+constexpr double kLowestScoreWeight = 0.5;
 
 std::mt19937_64 seededGenerator()
 {
@@ -40,17 +48,34 @@ bool hasStateArrays(const QJsonObject &root)
            root.value(QStringLiteral("history")).isArray();
 }
 
-bool writeJsonFile(const QString &path, const QJsonObject &state)
+bool writeJsonFile(const QString &path, const QByteArray &payload)
 {
     QDir().mkpath(QFileInfo(path).absolutePath());
 
-    QFile file(path);
+    // 先写临时文件再改名：写到一半崩溃或断电也不会留下半截 data.json
+    const QString tempPath = path + QStringLiteral(".tmp");
+    QFile file(tempPath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         qWarning() << "cannot write JSON file:" << path;
         return false;
     }
 
-    return file.write(QJsonDocument(state).toJson(QJsonDocument::Indented)) >= 0;
+    if (file.write(payload) < 0) {
+        file.close();
+        return false;
+    }
+    file.close();
+
+    if (QFile::exists(path) && !QFile::remove(path)) {
+        qWarning() << "cannot replace JSON file:" << path;
+        return false;
+    }
+    return QFile::rename(tempPath, path);
+}
+
+bool writeJsonFile(const QString &path, const QJsonObject &state)
+{
+    return writeJsonFile(path, QJsonDocument(state).toJson(QJsonDocument::Indented));
 }
 
 }  // namespace
@@ -61,8 +86,25 @@ BackendBridge::BackendBridge(QObject *parent)
       drawEngine_(std::make_unique<xieqian::core::DrawEngine>(seededGenerator())),
       aiManager_(std::make_unique<AiManager>())
 {
+    // 写盘只在单个线程里排队执行，避免快照相互覆盖或文件被交叉写入
+    savePool_.setMaxThreadCount(1);
+
     loadState();
     aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_, aiModel_);
+
+    saveTimer_ = new QTimer(this);
+    saveTimer_->setSingleShot(true);
+    saveTimer_->setInterval(220);
+    connect(saveTimer_, &QTimer::timeout, this, &BackendBridge::writeStateAsync);
+
+    if (QCoreApplication *app = QCoreApplication::instance()) {
+        connect(app, &QCoreApplication::aboutToQuit, this, &BackendBridge::flushState);
+    }
+}
+
+BackendBridge::~BackendBridge()
+{
+    flushState();
 }
 
 void BackendBridge::loadState()
@@ -299,28 +341,40 @@ int BackendBridge::applyScoreWeights(const QVariantList &entries)
         return left.score > right.score;
     });
 
-    int updated = 0;
+    // 先收集每个分数对应的权重：最高分 5.0，最低分 0.5，按名次线性递减
+    std::vector<std::pair<QString, double>> weights;
+    weights.reserve(scored.size());
     for (std::size_t rank = 0; rank < scored.size(); ++rank) {
-        // 按名次线性分配：最高分 5.0，最低分 0.5；只有一人时直接给满权重
         const double ratio = scored.size() > 1
                                  ? static_cast<double>(rank) /
                                        static_cast<double>(scored.size() - 1)
                                  : 0.0;
-        const double weight = 5.0 - 4.5 * ratio;
+        weights.emplace_back(scored[rank].name, 5.0 - 4.5 * ratio);
+    }
 
-        for (std::size_t index = 0; index < roster_->size(); ++index) {
-            if (QString::fromStdString(roster_->at(index).name) == scored[rank].name) {
-                roster_->setWeight(index, weight);
-                ++updated;
-                break;
-            }
+    int updated = 0;
+    // 全员重算：成绩单上的人按名次拿权重，没出现在成绩单上的人压到最低档，
+    // 否则旧权重会留在池子里把刚刚算好的比例打破。
+    for (std::size_t index = 0; index < roster_->size(); ++index) {
+        const QString name = QString::fromStdString(roster_->at(index).name);
+        const auto match = std::find_if(weights.begin(), weights.end(),
+                                        [&name](const std::pair<QString, double> &entry) {
+                                            return entry.first == name;
+                                        });
+        if (match != weights.end()) {
+            roster_->setWeight(index, match->second);
+            ++updated;
+        } else {
+            roster_->setWeight(index, kLowestScoreWeight);
         }
     }
 
-    if (updated > 0) {
-        saveState();
-        emit rosterUpdated();
+    if (updated == 0) {
+        return 0;
     }
+
+    saveState();
+    emit rosterUpdated();
     return updated;
 }
 
@@ -365,10 +419,12 @@ void BackendBridge::updateParticipantWeight(const QString &id, double weight)
         return;
     }
 
+    // 与界面上的输入限制保持一致，越界值直接夹紧而不是静默丢弃
+    const double clamped = std::clamp(weight, kMinWeight, kMaxWeight);
     const std::string key = id.toStdString();
     for (std::size_t index = 0; index < roster_->size(); ++index) {
         if (xieqian::core::participantId(roster_->at(index)) == key) {
-            roster_->setWeight(index, weight);
+            roster_->setWeight(index, clamped);
             saveState();
             emit rosterUpdated();
             return;
@@ -892,9 +948,36 @@ void BackendBridge::applyData(const QJsonObject &root)
     drawEngine_->clearDrawnHistory();
 }
 
-void BackendBridge::saveState() const
+void BackendBridge::saveState()
 {
-    writeJsonFile(dataFilePath(), stateToJson());
+    if (saveTimer_ == nullptr) {
+        return;
+    }
+
+    // 合并短时间内的连续改动（改权重、切开关、连续开奖），只写一次盘
+    saveTimer_->start();
+}
+
+void BackendBridge::writeStateAsync()
+{
+    const QString path = dataFilePath();
+    const QByteArray payload = QJsonDocument(stateToJson()).toJson(QJsonDocument::Indented);
+
+    savePool_.start(QRunnable::create([path, payload]() {
+        writeJsonFile(path, payload);
+    }));
+}
+
+void BackendBridge::flushState()
+{
+    if (saveTimer_ != nullptr) {
+        saveTimer_->stop();
+    }
+
+    // 退出前把最新状态同步写一次，再等线程池里的旧任务收尾
+    savePool_.waitForDone();
+    writeJsonFile(dataFilePath(),
+                  QJsonDocument(stateToJson()).toJson(QJsonDocument::Indented));
 }
 
 QString BackendBridge::chooseBackupPath()

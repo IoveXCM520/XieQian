@@ -42,7 +42,7 @@ Item {
         "幸运没有剧本，却偏偏选中你",
         "掌声给到这位天选之人",
         "概率很小，你很大",
-        "抽中你的那一下，连风都在鼓掌",
+        "选中你的那一下，连风都在鼓掌",
         "这一刻，签文为你折返",
         "好事发生，正在加载 100%",
         "你今天的运气，超标了",
@@ -80,7 +80,7 @@ Item {
         "一盏灯为你亮，一签为你留",
         "愿这份惊喜，抵得过所有疲惫",
         "好运有迹可循，线索是你的名字",
-        "抽中你，是今天最顺的事",
+        "选中你，是今天最顺的事",
         "你走过的路，都算数",
         "命运敲门时，你刚好在家",
         "这一签，祝你万事顺遂",
@@ -306,8 +306,8 @@ Item {
             anchors.topMargin: 28
             anchors.horizontalCenter: parent.horizontalCenter
             text: resultCard.multi
-                  ? "共 " + resultCard.winnerNames.length + " 位中签"
-                  : "恭 喜 中 签"
+                  ? "共 " + resultCard.winnerNames.length + " 位被选中"
+                  : "已 被 选 中"
             color: Theme.primary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontMicro

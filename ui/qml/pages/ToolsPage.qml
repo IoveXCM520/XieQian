@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Window
 
 import ".."
+import "../components"
 import "../components/ExpressionParser.js" as Parser
 
 /*!
@@ -114,11 +115,6 @@ Item {
 
         if (!outcome.ok) {
             calcError = outcome.error
-            calcResult = "错误"
-            return
-        }
-        if (!isFinite(outcome.value)) {
-            calcError = "除数不能为 0"
             calcResult = "错误"
             return
         }
@@ -550,23 +546,24 @@ Item {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: 64
+            height: 76
 
             Column {
                 anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 4
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 12
+                spacing: 2
 
                 Text {
-                    text: "教学工具"
+                    text: "工具"
                     color: Theme.textPrimary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontH0
+                    font.pixelSize: Theme.fontLargeTitle
                     font.weight: Font.Bold
                 }
 
                 Text {
-                    text: "高级计算器与函数图像，随手可用"
+                    text: "算一算，画一画，随手可用"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontBody
@@ -593,7 +590,6 @@ Item {
             id: toolStack
 
             anchors.top: header.bottom
-            anchors.topMargin: 16
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
@@ -631,8 +627,8 @@ Item {
                             height: 120
                             radius: Theme.radiusCard
                             color: Theme.surface
-                            border.width: 1
-                            border.color: Theme.withAlpha(Theme.textPrimary, 0.05)
+
+                            CardShadow {}
 
                             Column {
                                 anchors.fill: parent
@@ -728,8 +724,8 @@ Item {
                     Layout.fillHeight: true
                     radius: Theme.radiusCard
                     color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
+
+                    CardShadow {}
 
                     Flickable {
                         id: plotPanelFlick
@@ -958,8 +954,6 @@ Item {
                     Layout.fillHeight: true
                     radius: Theme.radiusCard
                     color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
                     clip: true
 
                     Rectangle {

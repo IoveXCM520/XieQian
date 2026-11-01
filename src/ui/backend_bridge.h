@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QThreadPool>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -14,6 +15,7 @@
 #include "xieqian/core/roster/roster.h"
 
 class QJsonObject;
+class QTimer;
 
 class BackendBridge : public QObject
 {
@@ -32,6 +34,7 @@ public:
     enum class DrawMode { Wheel = 0, FlipCard = 1, BlindBox = 2 };
 
     explicit BackendBridge(QObject *parent = nullptr);
+    ~BackendBridge() override;
 
     Q_INVOKABLE QString drawWinner();
     Q_INVOKABLE QVariantList drawWinners(int count);
@@ -117,7 +120,10 @@ private:
         const std::vector<xieqian::core::Participant> &pool) const;
     void applyData(const QJsonObject &root);
     [[nodiscard]] QJsonObject stateToJson() const;
-    void saveState() const;
+    // 合并短时间内的多次改动后异步落盘，退出与导出时走同步 flush
+    void saveState();
+    void writeStateAsync();
+    void flushState();
     void loadState();
     [[nodiscard]] static QString dataFilePath();
     [[nodiscard]] static QString firstRunFlagPath();
@@ -125,6 +131,9 @@ private:
     std::shared_ptr<xieqian::core::Roster> roster_;
     std::unique_ptr<xieqian::core::DrawEngine> drawEngine_;
     std::unique_ptr<AiManager> aiManager_;
+    // 单线程池保证写盘顺序与调用顺序一致
+    QThreadPool savePool_;
+    QTimer *saveTimer_ = nullptr;
     std::vector<HistoryEntry> history_;
     std::vector<CustomWheel> customWheels_;
     QString activeWheelName_;

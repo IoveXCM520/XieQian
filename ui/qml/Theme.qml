@@ -4,6 +4,7 @@ import QtQuick
 
 /*!
     撷签全局设计系统。
+    iOS / macOS 设置页的设计语言：浅灰分组背景、纯白大圆角卡片、极细分割线。
     所有页面、组件只从这里取色、字号、圆角与动效时长。
 */
 QtObject {
@@ -33,38 +34,47 @@ QtObject {
     // ─────────────────────────────────────────────────────────────
     // 中性色
     // ─────────────────────────────────────────────────────────────
-    readonly property color background: "#E6E8EB"
+    // 分组背景：iOS 设置页的浅灰
+    readonly property color background: "#F2F2F7"
+    readonly property color groupedBackground: "#F2F2F7"
+    // 卡片与输入框
     readonly property color surface: "#FFFFFF"
-    readonly property color surfaceAlt: "#F5F6F8"
-    readonly property color surfaceMuted: "#F5F6F8"
-    readonly property color surfaceHover: "#EEF0F3"
-    readonly property color surfacePressed: "#E5E8EC"
+    readonly property color surfaceAlt: "#F2F2F7"
+    readonly property color surfaceMuted: "#F2F2F7"
+    readonly property color surfaceHover: "#F5F5F7"
+    readonly property color surfacePressed: "#EBEBF0"
+    readonly property color fill: "#F2F2F7"
 
     readonly property color textPrimary: "#000000"
-    readonly property color textSecondary: "#6C727A"
-    readonly property color textTertiary: "#8B929B"
+    readonly property color textSecondary: "#6E6E73"
+    readonly property color textTertiary: "#8E8E93"
     readonly property color textInverse: "#FFFFFF"
 
-    readonly property color divider: "#D6DAE0"
-    readonly property color border: "#D2D7DE"
-    readonly property color borderStrong: "#BFC5CE"
+    // 极细分割线：卡片内项与项之间用它，左侧留白不顶格
+    readonly property color divider: "#E5E5EA"
+    readonly property color hairline: "#E5E5EA"
+    readonly property color separator: "#E5E5EA"
+    readonly property color border: "#E5E5EA"
+    readonly property color borderStrong: "#D1D1D6"
 
-    readonly property color success: "#2ED4A5"
-    readonly property color warning: "#FFB020"
-    readonly property color danger: "#F54A45"
-    readonly property color dangerHover: "#E81123"
-    readonly property color info: "#3B8BF6"
+    readonly property color success: "#34C759"
+    readonly property color warning: "#FF9F0A"
+    readonly property color danger: "#FF3B30"
+    readonly property color dangerHover: "#D70015"
+    readonly property color info: "#007AFF"
 
     readonly property color successSoft: "#E8F8F3"
     readonly property color warningSoft: "#FFF7E6"
-    readonly property color dangerSoft: "#FFF0EF"
+    readonly property color dangerSoft: "#FFEBEA"
 
     readonly property color white: "#FFFFFF"
     readonly property color black: "#000000"
     readonly property color transparent: "#00000000"
     readonly property color overlay: "#66000000"
     readonly property color scrim: "#33000000"
-    readonly property color switchOff: "#D6DAE0"
+    // iOS 开关：开亮绿、关浅灰
+    readonly property color switchOn: "#34C759"
+    readonly property color switchOff: "#E5E5EA"
 
     // 大转盘辅助色（高饱和）
     readonly property color wheelSectorA: "#1E88FF"
@@ -74,25 +84,26 @@ QtObject {
     readonly property color wheelText: "#FFFFFF"
 
     // ─────────────────────────────────────────────────────────────
-    // 阴影
+    // 阴影：iOS 卡片是柔和的大范围低透明度投影
     // ─────────────────────────────────────────────────────────────
-    readonly property color shadowColor: "#1F000000"
-    readonly property color shadowColorStrong: "#33000000"
-    readonly property int shadowRadius: 12
+    readonly property color shadowColor: "#14000000"
+    readonly property color shadowColorStrong: "#1F000000"
+    readonly property int shadowRadius: 14
     readonly property int shadowSamples: 17
     readonly property int shadowOffsetY: 4
-    readonly property int shadowRadiusLarge: 24
+    readonly property int shadowRadiusLarge: 28
     readonly property int shadowOffsetYLarge: 10
 
     // ─────────────────────────────────────────────────────────────
     // 圆角
     // ─────────────────────────────────────────────────────────────
     readonly property int radiusWindow: 12
-    readonly property int radiusCard: 16
-    readonly property int radiusListCard: 16
-    readonly property int radiusDialog: 24
-    readonly property int radiusControl: 8
-    readonly property int radiusSmall: 6
+    readonly property int radiusCard: 18
+    readonly property int radiusListCard: 18
+    readonly property int radiusDialog: 20
+    readonly property int radiusControl: 14
+    readonly property int radiusButton: 14
+    readonly property int radiusSmall: 8
     readonly property int radiusPill: 999
 
     // ─────────────────────────────────────────────────────────────
@@ -100,6 +111,8 @@ QtObject {
     // ─────────────────────────────────────────────────────────────
     readonly property string fontFamily: "Microsoft YaHei UI"
 
+    // iOS Large Title
+    readonly property int fontLargeTitle: 34
     readonly property int fontDisplay: 32
     readonly property int fontH0: 24
     readonly property int fontH1: 20
@@ -119,6 +132,12 @@ QtObject {
     readonly property int titleBarHeight: 60
     readonly property int sidebarWidth: 96
     readonly property int pagePadding: 32
+    // iOS 列表行高与主按钮高度
+    readonly property int rowHeight: 60
+    readonly property int buttonHeight: 48
+    // 分组卡片的左右内缩，分割线左侧留白与文字对齐
+    readonly property int cardPadding: 18
+    readonly property int separatorInset: 18
 
     readonly property int space1: 4
     readonly property int space2: 8

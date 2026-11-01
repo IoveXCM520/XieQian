@@ -50,6 +50,22 @@ function tokenize(text) {
             while (index < text.length
                    && (isDigit(text.charAt(index)) || text.charAt(index) === "."))
                 ++index
+
+            // 科学计数法：1e5、2.5E-3。只有当 e 后确实跟着数字时才吃进来，
+            // 否则 “2e” 应该仍然理解成 2 × e。
+            if (index < text.length
+                    && (text.charAt(index) === "e" || text.charAt(index) === "E")) {
+                var probe = index + 1
+                if (probe < text.length
+                        && (text.charAt(probe) === "+" || text.charAt(probe) === "-"))
+                    ++probe
+                if (probe < text.length && isDigit(text.charAt(probe))) {
+                    index = probe + 1
+                    while (index < text.length && isDigit(text.charAt(index)))
+                        ++index
+                }
+            }
+
             var value = parseFloat(text.substring(start, index))
             if (isNaN(value))
                 throw new Error("数字格式有误：" + text.substring(start, index))
@@ -317,8 +333,15 @@ function evaluate(text, variables) {
 
     try {
         var value = evaluateNode(parsed.root, variables ? variables : {})
-        if (typeof value !== "number" || isNaN(value))
+        if (typeof value !== "number")
             return { ok: false, value: NaN, error: "无法计算该表达式", repaired: repaired }
+        // 分开报告 NaN 与 ±Infinity：前者几乎总是定义域问题，后者是除以 0 或溢出
+        if (isNaN(value))
+            return { ok: false, value: NaN,
+                     error: "结果没有定义，检查一下负数开方或 0 的对数", repaired: repaired }
+        if (!isFinite(value))
+            return { ok: false, value: NaN,
+                     error: "结果没有上限，看看是不是除以 0 或取了 0 的对数", repaired: repaired }
         return { ok: true, value: value, error: "", repaired: repaired }
     } catch (error) {
         return { ok: false, value: NaN, error: error.message, repaired: repaired }

@@ -63,36 +63,43 @@ Item {
         }
     }
 
+    // 每次进入页面重新取一次，避免后台改动后看到旧数据
+    onVisibleChanged: {
+        if (visible)
+            refresh()
+    }
+
     Item {
         id: pageContent
         anchors.fill: parent
         anchors.margins: Theme.pagePadding
 
         // ─────────────────────────────────────────────────────────
-        // 标题
+        // iOS 大标题
         // ─────────────────────────────────────────────────────────
         Item {
             id: header
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: 64
+            height: 76
 
             Column {
                 anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 4
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 12
+                spacing: 2
 
                 Text {
-                    text: "名单管理"
+                    text: "名单"
                     color: Theme.textPrimary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontH0
+                    font.pixelSize: Theme.fontLargeTitle
                     font.weight: Font.Bold
                 }
 
                 Text {
-                    text: "管理名单成员，点击卡片切换是否参与抽签"
+                    text: "左侧开关决定谁参与这一轮"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontBody
@@ -102,12 +109,10 @@ Item {
             Rectangle {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                height: 32
+                height: 30
                 width: countRow.implicitWidth + 22
-                radius: 16
+                radius: 15
                 color: Theme.surface
-                border.width: 1
-                border.color: Theme.withAlpha(Theme.primary, 0.10)
 
                 RowLayout {
                     id: countRow
@@ -141,7 +146,6 @@ Item {
             id: listView
 
             anchors.top: header.bottom
-            anchors.topMargin: 16
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
@@ -164,10 +168,6 @@ Item {
                 height: 72
                 radius: Theme.radiusListCard
                 color: Theme.surface
-                border.width: 1
-                border.color: cardMouse.containsMouse
-                              ? Theme.withAlpha(Theme.primary, 0.22)
-                              : Theme.withAlpha(Theme.textPrimary, 0.045)
                 opacity: modelData.enabled ? 1.0 : 0.55
                 scale: cardMouse.containsMouse ? 1.002 : 1.0
 
@@ -180,13 +180,6 @@ Item {
 
                 Behavior on scale {
                     NumberAnimation {
-                        duration: Theme.durationFast
-                        easing.type: Easing.OutCubic
-                    }
-                }
-
-                Behavior on border.color {
-                    ColorAnimation {
                         duration: Theme.durationFast
                         easing.type: Easing.OutCubic
                     }
@@ -246,10 +239,10 @@ Item {
                         }
                     }
 
-                    RosterSwitch {
+                    IosSwitch {
                         Layout.alignment: Qt.AlignVCenter
                         Layout.preferredWidth: 46
-                        Layout.preferredHeight: 26
+                        Layout.preferredHeight: 28
                         checked: modelData.enabled
                         onToggled: function(value) {
                             if (value !== modelData.enabled)
@@ -357,7 +350,7 @@ Item {
 
                     Text {
                         width: parent.width
-                        text: "名单还是空的"
+                        text: "还没有任何人"
                         horizontalAlignment: Text.AlignHCenter
                         color: Theme.textPrimary
                         font.family: Theme.fontFamily
@@ -367,7 +360,7 @@ Item {
 
                     Text {
                         width: parent.width
-                        text: "还没有成员，去添加页导入名字，保存转盘时选择加入名单池"
+                        text: "去添加页导入一份数据，就能开始抽了"
                         horizontalAlignment: Text.AlignHCenter
                         color: Theme.textSecondary
                         font.family: Theme.fontFamily
@@ -411,7 +404,7 @@ Item {
 
             Text {
                 width: parent.width
-                text: "从名单中移除「" + page.removeTargetName + "」？"
+                text: "把「" + page.removeTargetName + "」移出名单？"
                 color: Theme.textPrimary
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontH2
@@ -421,7 +414,7 @@ Item {
 
             Text {
                 width: parent.width
-                text: "移除后该成员不再参与抽签，已产生的抽取历史会保留。"
+                text: "移出后不再参与抽签，抽过的记录还会留着。"
                 color: Theme.textSecondary
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontBody
@@ -459,59 +452,6 @@ Item {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // 启用开关
-    // ─────────────────────────────────────────────────────────────
-    component RosterSwitch: Item {
-        id: control
-
-        property bool checked: false
-        signal toggled(bool value)
-
-        width: 46
-        height: 26
-
-        Rectangle {
-            id: track
-            anchors.fill: parent
-            radius: height / 2
-            color: control.checked ? Theme.success : Theme.switchOff
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: Theme.durationNormal
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
-        Rectangle {
-            id: knob
-            y: 2
-            x: control.checked ? control.width - width - 2 : 2
-            width: 22
-            height: 22
-            radius: 11
-            color: Theme.white
-            border.width: 1
-            border.color: Theme.withAlpha(Theme.textPrimary, 0.08)
-
-            Behavior on x {
-                NumberAnimation {
-                    duration: Theme.durationNormal
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: control.toggled(!control.checked)
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────
     // 通用按钮
     // ─────────────────────────────────────────────────────────────
     component RosterButton: Item {
@@ -522,14 +462,12 @@ Item {
         signal clicked()
 
         implicitWidth: 130
-        implicitHeight: 40
+        implicitHeight: 44
         width: 130
-        height: 40
+        height: 44
         enabled: true
         opacity: enabled ? 1.0 : 0.45
-        scale: mouse.pressed && enabled
-               ? 0.95
-               : (mouse.containsMouse && enabled ? 1.02 : 1.0)
+        scale: mouse.pressed && enabled ? 0.96 : 1.0
 
         Behavior on opacity {
             NumberAnimation {
@@ -547,7 +485,7 @@ Item {
 
         Rectangle {
             anchors.fill: parent
-            radius: height / 2
+            radius: Theme.radiusButton
             gradient: Gradient {
                 orientation: Gradient.Horizontal
                 GradientStop {
@@ -560,12 +498,12 @@ Item {
                 }
             }
             border.width: button.primary ? 0 : 1
-            border.color: Theme.border
+            border.color: Theme.separator
         }
 
         Rectangle {
             anchors.fill: parent
-            radius: height / 2
+            radius: Theme.radiusButton
             color: button.primary ? Theme.white : Theme.primarySoft
             opacity: mouse.containsMouse && button.enabled
                      ? (button.primary ? 0.10 : 0.55)

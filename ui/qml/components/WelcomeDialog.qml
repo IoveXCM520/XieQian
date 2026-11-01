@@ -114,7 +114,7 @@ Item {
             anchors.rightMargin: 40
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            text: "专注课堂抽奖、随机分组与排座位，支持自定义转盘和 AI 辅助"
+            text: "自定义转盘、名单权重与成绩识图，都在一个窗口里"
             color: Theme.textSecondary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontBody
@@ -132,7 +132,7 @@ Item {
             anchors.rightMargin: 40
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            text: "前往设置页配置 AI 助手，或直接使用内置功能"
+            text: "去设置页填上自己的 AI 密钥，或直接用内置功能"
             color: Theme.primary
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontCaption

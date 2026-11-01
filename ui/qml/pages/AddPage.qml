@@ -263,23 +263,24 @@ Item {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: 64
+            height: 76
 
             Column {
                 anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 4
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 12
+                spacing: 2
 
                 Text {
-                    text: "创建新转盘"
+                    text: "添加"
                     color: Theme.textPrimary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontH0
+                    font.pixelSize: Theme.fontLargeTitle
                     font.weight: Font.Bold
                 }
 
                 Text {
-                    text: "为课堂、聚会或选择困难时刻，做一只专属签盘"
+                    text: "给课堂、聚会或选择困难时刻，做一只专属签盘"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontBody
@@ -294,14 +295,11 @@ Item {
         Rectangle {
             id: card
             anchors.top: header.bottom
-            anchors.topMargin: 16
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             radius: Theme.radiusCard
             color: Theme.surface
-            border.width: 1
-            border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
             clip: true
 
             // ── 表单态 ──
@@ -346,7 +344,7 @@ Item {
                             radius: 12
                             color: Theme.surfaceAlt
                             border.width: 1
-                            border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
+                            border.color: Theme.separator
 
                             Column {
                                 id: importColumn
@@ -357,7 +355,7 @@ Item {
                                 spacing: 10
 
                                 Text {
-                                    text: "名单数据导入"
+                                    text: "导入数据"
                                     color: Theme.textPrimary
                                     font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontBody
@@ -366,7 +364,7 @@ Item {
 
                                 Text {
                                     width: parent.width
-                                    text: "导入 CSV / TXT，或让 AI 识别名单截图；识别结果会追加到下面的选项，不会直接改动名单池"
+                                    text: "从 CSV / TXT 或一张截图取出名字，结果会追加到下面的选项"
                                     color: Theme.textSecondary
                                     font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontCaption
@@ -379,7 +377,7 @@ Item {
                                     ImportButton {
                                         width: 124
                                         height: 38
-                                        text: "导入到选项"
+                                        text: "导入"
                                         primary: true
                                         enabled: !page.ocrBusy
                                         onClicked: page.importRosterFile()
@@ -770,7 +768,7 @@ Item {
                         anchors.left: parent.left
                         anchors.leftMargin: 32
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "保存后会立即生成专属转盘"
+                        text: "保存后马上就能转"
                         color: Theme.textSecondary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontBody
@@ -841,7 +839,7 @@ Item {
                         Text {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
-                            text: "转盘创建成功"
+                            text: "转盘做好了"
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
                             font.pixelSize: 24
@@ -853,7 +851,7 @@ Item {
                         Text {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
-                            text: "「" + page.createdName + "」已经准备好了"
+                            text: "「" + page.createdName + "」可以开转了"
                             color: Theme.textSecondary
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontBody
@@ -934,7 +932,7 @@ Item {
                                 PrimaryButton {
                                     width: 156
                                     height: 48
-                                    text: "去抽奖"
+                                    text: "去转一次"
                                     onClicked: page.goDraw()
                                 }
                             }
@@ -990,7 +988,7 @@ Item {
 
             Text {
                 width: parent.width
-                text: "还有 " + page.importedNames.length + " 个导入的名字，要一起放进抽奖名单池吗？"
+                text: "还有 " + page.importedNames.length + " 个导入的名字，要一起加入名单吗？"
                 color: Theme.textSecondary
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontBody
@@ -1036,7 +1034,7 @@ Item {
                     }
 
                     Text {
-                        text: "同时将这些名字加入抽奖名单池"
+                        text: "同时把这些人加入名单"
                         color: Theme.textPrimary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontBody
@@ -1255,10 +1253,10 @@ Item {
         signal clicked()
 
         width: 208
-        height: 50
+        height: Theme.buttonHeight
         enabled: true
         opacity: enabled ? 1.0 : 0.45
-        scale: mouse.pressed ? 0.95 : (mouse.containsMouse ? 1.02 : 1.0)
+        scale: mouse.pressed ? 0.96 : 1.0
 
         Behavior on opacity {
             NumberAnimation {
@@ -1277,7 +1275,7 @@ Item {
         Rectangle {
             id: bodyShadow
             anchors.fill: parent
-            radius: height / 2
+            radius: Theme.radiusButton
             gradient: Theme.primaryGradient
             layer.enabled: true
             layer.effect: MultiEffect {
@@ -1293,7 +1291,7 @@ Item {
         Rectangle {
             id: body
             anchors.fill: parent
-            radius: height / 2
+            radius: Theme.radiusButton
             gradient: Theme.primaryGradient
             border.width: 1
             border.color: Theme.withAlpha(Theme.white, 0.18)

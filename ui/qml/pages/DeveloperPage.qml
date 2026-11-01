@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Effects
 import QtQuick.Window
 
 import ".."
@@ -9,9 +8,9 @@ import "../components"
 
 /*!
     开发者控制台（隐藏页，不出现在左侧导航）。
-    - 权重列表：直接输入修改
-    - 从成绩单图片识别姓名与分数，按名次线性分配权重
-    - 重置抽奖状态、切换静态 / 动态权重
+    - 权重列表：手动改权重后立刻写回后端并持久化
+    - 从成绩单图片识别姓名与分数，按名次重算全员权重
+    - 重置抽取状态、切换静态 / 动态权重
 */
 Item {
     id: page
@@ -42,14 +41,32 @@ Item {
 
         ocrBusy = true
         statusFailed = false
-        statusMessage = "AI 正在读取成绩单..."
+        statusMessage = "AI 正在读取成绩单…"
         backendBridge.aiManager.ocrScoresFromImage(path)
     }
 
     function resetDrawState() {
         backendBridge.resetDrawStats()
         statusFailed = false
-        statusMessage = "已重置全部成员的抽取状态与动态权重计数"
+        statusMessage = "已清空所有人的抽取记录与权重计数"
+    }
+
+    // 手动改权重：越界值夹到 0.1 ~ 1000，非法输入由调用方还原原值
+    function normalizeWeight(rawValue) {
+        var value = Number(String(rawValue).replace(",", "."))
+        if (!isFinite(value) || value <= 0)
+            return NaN
+        return Math.max(0.1, Math.min(1000, value))
+    }
+
+    function reportWeightSaved() {
+        statusFailed = false
+        statusMessage = "权重已保存"
+    }
+
+    function reportWeightInvalid() {
+        statusFailed = true
+        statusMessage = "权重需要是大于 0 的数字"
     }
 
     Component.onCompleted: refresh()
@@ -75,8 +92,9 @@ Item {
             var updated = backendBridge.applyScoreWeights(entries)
             page.statusFailed = updated === 0
             page.statusMessage = updated > 0
-                                 ? "已按成绩排名为 " + updated + " 人分配权重（最高 5.0，最低 0.5）"
-                                 : "识别到的姓名不在名单里"
+                                 ? "已按成绩重算 " + updated + " 人的权重，其他人落到最低档"
+                                 : "成绩单上的名字不在名单里"
+            page.refresh()
         }
 
         function onOcrFailed(message) {
@@ -98,36 +116,45 @@ Item {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: 64
+            height: 76
 
             Column {
                 anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 4
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 12
+                spacing: 2
 
                 Text {
                     text: "开发者控制台"
                     color: Theme.textPrimary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontH0
+                    font.pixelSize: Theme.fontLargeTitle
                     font.weight: Font.Bold
                 }
 
                 Text {
-                    text: "权重调校、成绩单调权与抽奖状态重置"
+                    text: "权重调校 · 成绩单调权 · 状态重置"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontBody
                 }
             }
 
-            DevButton {
+            Text {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                width: 104
-                height: 38
                 text: "返回设置"
-                onClicked: page.goBack()
+                color: Theme.primary
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontBody
+
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -8
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: page.goBack()
+                }
             }
         }
 
@@ -135,7 +162,6 @@ Item {
             id: actionRow
 
             anchors.top: header.bottom
-            anchors.topMargin: 12
             anchors.left: parent.left
             anchors.right: parent.right
             spacing: 12
@@ -143,43 +169,40 @@ Item {
             // 权重模式
             Rectangle {
                 Layout.preferredWidth: 360
-                Layout.preferredHeight: 88
-                radius: Theme.radiusListCard
+                Layout.preferredHeight: 92
+                radius: Theme.radiusCard
                 color: Theme.surface
-                border.width: 1
-                border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
 
                 CardShadow {}
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 20
-                    anchors.rightMargin: 20
+                    anchors.leftMargin: Theme.cardPadding
+                    anchors.rightMargin: Theme.cardPadding
                     spacing: 12
 
                     Column {
                         Layout.fillWidth: true
-                        spacing: 4
+                        spacing: 3
 
                         Text {
-                            text: backendBridge.dynamicWeights ? "动态权重 · Dynamic" : "静态权重 · Static"
+                            text: backendBridge.dynamicWeights ? "动态权重" : "静态权重"
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontBody
-                            font.weight: Font.DemiBold
                         }
 
                         Text {
                             width: parent.width
-                            text: "base × exp(-drawCount / 3) × max(0.1, 1 - streak × 0.2)"
+                            text: "被选中越多次，下一次出现得越少"
                             color: Theme.textSecondary
                             font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontMicro
+                            font.pixelSize: Theme.fontCaption
                             wrapMode: Text.WordWrap
                         }
                     }
 
-                    DevSwitch {
+                    IosSwitch {
                         Layout.alignment: Qt.AlignVCenter
                         checked: backendBridge.dynamicWeights
                         onToggled: function(value) {
@@ -192,35 +215,33 @@ Item {
             // 操作
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 88
-                radius: Theme.radiusListCard
+                Layout.preferredHeight: 92
+                radius: Theme.radiusCard
                 color: Theme.surface
-                border.width: 1
-                border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
 
                 CardShadow {}
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 20
-                    anchors.rightMargin: 20
+                    anchors.leftMargin: Theme.cardPadding
+                    anchors.rightMargin: Theme.cardPadding
                     spacing: 12
 
                     DevButton {
                         Layout.alignment: Qt.AlignVCenter
-                        width: 176
-                        height: 40
+                        width: 170
+                        height: 42
                         primary: true
-                        text: page.ocrBusy ? "识别中…" : "从成绩单 AI 调权"
+                        text: page.ocrBusy ? "识别中…" : "从成绩单调权"
                         enabled: !page.ocrBusy
                         onClicked: page.adjustFromScoreSheet()
                     }
 
                     DevButton {
                         Layout.alignment: Qt.AlignVCenter
-                        width: 132
-                        height: 40
-                        text: "重置抽奖状态"
+                        width: 124
+                        height: 42
+                        text: "重置状态"
                         onClicked: page.resetDrawState()
                     }
 
@@ -231,7 +252,7 @@ Item {
                         visible: text.length > 0
                         color: page.statusFailed ? Theme.danger : Theme.textSecondary
                         font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontMicro
+                        font.pixelSize: Theme.fontCaption
                         elide: Text.ElideRight
                     }
                 }
@@ -262,11 +283,9 @@ Item {
                 CardShadow {}
 
                 width: ListView.view ? ListView.view.width : 0
-                height: 72
+                height: 70
                 radius: Theme.radiusListCard
                 color: Theme.surface
-                border.width: 1
-                border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
                 opacity: modelData.enabled ? 1.0 : 0.6
 
                 RowLayout {
@@ -309,11 +328,12 @@ Item {
 
                         Text {
                             width: parent.width
-                            text: "中签 " + modelData.drawCount + " 次 · 连中 " + modelData.streak
-                                  + " · " + (modelData.enabled ? "已启用" : "已停用")
+                            text: "被选中 " + modelData.drawCount + " 次 · 连续 "
+                                  + modelData.streak + " 次"
+                                  + (modelData.enabled ? "" : " · 已停用")
                             color: Theme.textSecondary
                             font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontMicro
+                            font.pixelSize: Theme.fontCaption
                             elide: Text.ElideRight
                         }
                     }
@@ -323,14 +343,14 @@ Item {
                         text: "权重"
                         color: Theme.textTertiary
                         font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontMicro
+                        font.pixelSize: Theme.fontCaption
                     }
 
                     TextField {
                         id: weightField
 
                         Layout.alignment: Qt.AlignVCenter
-                        Layout.preferredWidth: 82
+                        Layout.preferredWidth: 84
                         Layout.preferredHeight: 38
                         text: Number(modelData.weight).toFixed(2)
                         horizontalAlignment: TextInput.AlignHCenter
@@ -338,6 +358,7 @@ Item {
                         color: Theme.textPrimary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontBody
+                        inputMethodHints: Qt.ImhFormattedNumbersOnly
                         leftPadding: 8
                         rightPadding: 8
 
@@ -345,21 +366,31 @@ Item {
                             bottom: 0.1
                             top: 1000
                             decimals: 2
+                            notation: DoubleValidator.StandardNotation
+                            locale: "C"
                         }
 
                         background: Rectangle {
-                            radius: Theme.radiusControl
-                            color: weightField.activeFocus ? Theme.surface : Theme.surfaceAlt
-                            border.width: 1
-                            border.color: weightField.activeFocus
-                                          ? Theme.primary
-                                          : Theme.withAlpha(Theme.textPrimary, 0.06)
+                            radius: 10
+                            color: Theme.fill
+                            border.width: weightField.activeFocus ? 1 : 0
+                            border.color: Theme.primary
                         }
 
                         onEditingFinished: {
-                            if (!acceptableInput || text.length === 0)
+                            var value = page.normalizeWeight(text)
+                            if (isNaN(value)) {
+                                text = Number(modelData.weight).toFixed(2)
+                                page.reportWeightInvalid()
                                 return
-                            backendBridge.updateParticipantWeight(modelData.id, parseFloat(text))
+                            }
+
+                            text = value.toFixed(2)
+                            if (Math.abs(value - Number(modelData.weight)) < 0.0001)
+                                return
+
+                            backendBridge.updateParticipantWeight(modelData.id, value)
+                            page.reportWeightSaved()
                         }
                     }
                 }
@@ -388,7 +419,7 @@ Item {
 
                     Text {
                         width: parent.width
-                        text: "先在添加页创建转盘并导入名字"
+                        text: "先去添加页导入一份数据"
                         horizontalAlignment: Text.AlignHCenter
                         color: Theme.textSecondary
                         font.family: Theme.fontFamily
@@ -396,57 +427,6 @@ Item {
                     }
                 }
             }
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // 开关
-    // ─────────────────────────────────────────────────────────────
-    component DevSwitch: Item {
-        id: control
-
-        property bool checked: false
-        signal toggled(bool value)
-
-        width: 50
-        height: 30
-
-        Rectangle {
-            anchors.fill: parent
-            radius: height / 2
-            color: control.checked ? Theme.success : Theme.switchOff
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: Theme.durationNormal
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
-        Rectangle {
-            y: 2
-            x: control.checked ? control.width - width - 2 : 2
-            width: 26
-            height: 26
-            radius: 13
-            color: Theme.white
-            border.width: 1
-            border.color: Theme.withAlpha(Theme.textPrimary, 0.08)
-
-            Behavior on x {
-                NumberAnimation {
-                    duration: Theme.durationNormal
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: control.toggled(!control.checked)
         }
     }
 
@@ -461,12 +441,10 @@ Item {
         signal clicked()
 
         width: 120
-        height: 40
+        height: 42
         enabled: true
         opacity: enabled ? 1.0 : 0.45
-        scale: mouse.pressed && enabled
-               ? 0.95
-               : (mouse.containsMouse && enabled ? 1.02 : 1.0)
+        scale: mouse.pressed && enabled ? 0.96 : 1.0
 
         Behavior on opacity {
             NumberAnimation {
@@ -484,7 +462,7 @@ Item {
 
         Rectangle {
             anchors.fill: parent
-            radius: height / 2
+            radius: Theme.radiusButton
             gradient: Gradient {
                 orientation: Gradient.Horizontal
                 GradientStop {
@@ -497,12 +475,12 @@ Item {
                 }
             }
             border.width: button.primary ? 0 : 1
-            border.color: Theme.border
+            border.color: Theme.separator
         }
 
         Rectangle {
             anchors.fill: parent
-            radius: height / 2
+            radius: Theme.radiusButton
             color: button.primary ? Theme.white : Theme.primarySoft
             opacity: mouse.containsMouse && button.enabled
                      ? (button.primary ? 0.10 : 0.55)

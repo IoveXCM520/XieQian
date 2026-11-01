@@ -11,33 +11,23 @@ ApplicationWindow {
 
     width: 1200
     height: 800
-    minimumWidth: pipMode ? 240 : 1000
-    minimumHeight: pipMode ? 240 : 680
+    minimumWidth: 1000
+    minimumHeight: 680
     visible: true
     title: qsTr("撷签 · 课堂抽签")
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint
-           | (pipMode ? Qt.WindowStaysOnTopHint : 0)
     font.family: Theme.fontFamily
     font.pixelSize: Theme.fontBody
 
-    // 画中画：窗口缩成 300×300 置顶悬浮窗，只保留转盘
-    property bool pipMode: false
-    property size pipRestoreSize: Qt.size(1200, 800)
-    // Windows 下边缘缩放由 C++ 命中测试接管，QML 不再绘制热区
-    readonly property bool nativeResizeAvailable: typeof nativeWindowResize !== "undefined"
-                                                  ? nativeWindowResize : false
-
-    background: Rectangle {
-        color: "transparent"
-    }
+    // 原生命中测试读取这两个值：标题栏可拖动高度、右侧窗口按钮预留宽度。
+    // 拖拽、吸附、还原、双击最大化全部由系统完成，QML 不再写窗口几何。
+    property int captionHeight: Theme.titleBarHeight
+    property int captionInset: 152
 
     readonly property int sidebarWidth: Theme.sidebarWidth
     readonly property int titleBarHeight: Theme.titleBarHeight
 
-    // 最大化/还原/缩放全部交给系统：自绘标题栏只把拖拽移交给 startSystemMove()、
-    // 把边缘拖拽移交给 startSystemResize()。窗口几何不再由 QML 逐帧写入，
-    // 否则动画中间态的尺寸与合成表面不一致，会出现内容裁切与错位
     readonly property bool maximized: visibility === Window.Maximized
 
     // 首次启动欢迎弹窗：启动页淡出后再弹出
@@ -94,60 +84,6 @@ ApplicationWindow {
             window.showMaximized()
     }
 
-    function enterPip() {
-        if (pipMode)
-            return
-
-        if (window.maximized)
-            window.showNormal()
-
-        pipRestoreSize = Qt.size(width, height)
-        pipMode = true
-    }
-
-    function exitPip() {
-        if (!pipMode)
-            return
-        pipMode = false
-    }
-
-    onPipModeChanged: {
-        if (pipMode) {
-            width = 300
-            height = 300
-        } else {
-            width = Math.max(minimumWidth, pipRestoreSize.width)
-            height = Math.max(minimumHeight, pipRestoreSize.height)
-        }
-
-        // 改了窗口 flags 后原生窗口会重建，需要重新显示一次
-        Qt.callLater(function() {
-            window.show()
-            window.requestActivate()
-        })
-    }
-
-    // 最大化时拖拽标题栏：先还原，再按指针在标题栏中的相对位置摆好窗口，
-    // 最后把拖拽交给系统，得到和其他程序一致的“扯下来”手感
-    function beginTitleDrag(pressPos) {
-        if (!window.maximized) {
-            window.startSystemMove()
-            return
-        }
-
-        var screenX = window.x + pressPos.x
-        var screenY = window.y + pressPos.y
-        var ratio = window.width > 0 ? pressPos.x / window.width : 0.5
-
-        window.showNormal()
-        // 等还原后的窗口尺寸生效，才能按比例把窗口摆到指针下方
-        Qt.callLater(function() {
-            window.x = Math.round(screenX - window.width * ratio)
-            window.y = Math.round(screenY - pressPos.y)
-            window.startSystemMove()
-        })
-    }
-
     // 首次启动欢迎弹窗：弹出时写入标记文件，之后不再出现
     function openWelcome() {
         welcomeDialog.open()
@@ -178,7 +114,8 @@ ApplicationWindow {
         }
 
         // ─────────────────────────────────────────────────────────
-        // 48px 自绘标题栏 / 透明拖拽区
+        // 48px 自绘标题栏
+        // 拖动与双击由 Win32 的 HTCAPTION 接管，这里只保留兜底
         // ─────────────────────────────────────────────────────────
         Rectangle {
             id: titleBar
@@ -188,42 +125,20 @@ ApplicationWindow {
             height: window.titleBarHeight
             color: Theme.surface
             z: 20
-            visible: !window.pipMode
 
             MouseArea {
-                id: titleDragArea
                 anchors.fill: parent
                 acceptedButtons: Qt.LeftButton
+                onPressed: window.startSystemMove()
+                onDoubleClicked: window.toggleMaximize()
+            }
 
-                property point pressPos
-                property bool dragging: false
-
-                onPressed: function(mouse) {
-                    pressPos = Qt.point(mouse.x, mouse.y)
-                    dragging = false
-                }
-
-                // 超过阈值才交给系统拖动：否则 startSystemMove() 会接管鼠标，
-                // 双击标题栏就再也收不到 onDoubleClicked
-                onPositionChanged: function(mouse) {
-                    if (!pressed || dragging)
-                        return
-                    if (Math.abs(mouse.x - pressPos.x) <= 3
-                            && Math.abs(mouse.y - pressPos.y) <= 3)
-                        return
-
-                    dragging = true
-                    window.beginTitleDrag(pressPos)
-                }
-
-                onReleased: dragging = false
-                onCanceled: dragging = false
-
-                onDoubleClicked: function(mouse) {
-                    if (titleDragArea.dragging)
-                        return
-                    window.toggleMaximize()
-                }
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: Theme.hairline
             }
 
             Row {
@@ -233,8 +148,8 @@ ApplicationWindow {
                 spacing: 10
 
                 Image {
-                    width: 32
-                    height: 32
+                    width: 30
+                    height: 30
                     source: "qrc:/ui/assets/app-icon-512.png"
                     sourceSize.width: 96
                     sourceSize.height: 96
@@ -256,7 +171,7 @@ ApplicationWindow {
 
                     Text {
                         text: "XIE QIAN"
-                        color: Theme.textSecondary
+                        color: Theme.textTertiary
                         font.family: Theme.fontFamily
                         font.pixelSize: 8
                         font.letterSpacing: 1.7
@@ -303,7 +218,14 @@ ApplicationWindow {
             width: window.sidebarWidth
             color: Theme.surface
             z: 10
-            visible: !window.pipMode
+
+            Rectangle {
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                width: 1
+                color: Theme.hairline
+            }
 
             Column {
                 anchors.top: parent.top
@@ -386,7 +308,6 @@ ApplicationWindow {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             clip: true
-            visible: !window.pipMode
 
             Rectangle {
                 anchors.fill: parent
@@ -497,174 +418,6 @@ ApplicationWindow {
                 }
             }
         }
-
-        // ─────────────────────────────────────────────────────────
-        // 画中画悬浮窗：只保留转盘与恢复按钮
-        // ─────────────────────────────────────────────────────────
-        Rectangle {
-            id: pipCard
-
-            anchors.fill: parent
-            anchors.margins: window.maximized ? 0 : 1
-            radius: Theme.radiusWindow
-            color: Theme.surface
-            border.width: 1
-            border.color: Theme.withAlpha(Theme.textPrimary, 0.08)
-            clip: true
-            z: 50
-            visible: window.pipMode
-
-            WheelItem {
-                anchors.fill: parent
-                anchors.margins: 8
-                options: homePage.wheelOptions
-                weights: homePage.wheelWeights
-                showPointer: false
-                motionEnabled: false
-            }
-
-            // 拖动整个悬浮窗
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.LeftButton
-                onPressed: window.startSystemMove()
-            }
-
-            Item {
-                width: 30
-                height: 30
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.topMargin: 8
-                anchors.rightMargin: 8
-                z: 2
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 15
-                    color: restoreMouse.containsMouse
-                           ? Theme.primarySoft
-                           : Theme.withAlpha(Theme.white, 0.9)
-                    border.width: 1
-                    border.color: Theme.withAlpha(Theme.textPrimary, 0.10)
-                }
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "恢复"
-                    color: restoreMouse.containsMouse ? Theme.primary : Theme.textSecondary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 11
-                    font.weight: Font.DemiBold
-                }
-
-                MouseArea {
-                    id: restoreMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: window.exitPip()
-                }
-            }
-        }
-
-        // ─────────────────────────────────────────────────────────
-        // 八方向缩放热区：仅在系统不支持原生命中测试时启用，
-        // 且最大化与画中画时彻底隐藏，避免抢鼠标事件
-        // ─────────────────────────────────────────────────────────
-        Item {
-            id: resizeBorders
-
-            anchors.fill: parent
-            z: 10000
-            visible: !window.maximized && !window.pipMode && !window.nativeResizeAvailable
-
-            ResizeEdge {
-                width: parent.width - 24
-                height: 5
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.top: parent.top
-                edges: Qt.TopEdge
-                cursorShape: Qt.SizeVerCursor
-            }
-
-            ResizeEdge {
-                width: parent.width - 24
-                height: 5
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottom: parent.bottom
-                edges: Qt.BottomEdge
-                cursorShape: Qt.SizeVerCursor
-            }
-
-            ResizeEdge {
-                width: 5
-                height: parent.height - 24
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.left: parent.left
-                edges: Qt.LeftEdge
-                cursorShape: Qt.SizeHorCursor
-            }
-
-            ResizeEdge {
-                width: 5
-                height: parent.height - 24
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.right: parent.right
-                edges: Qt.RightEdge
-                cursorShape: Qt.SizeHorCursor
-            }
-
-            ResizeEdge {
-                width: 12
-                height: 12
-                anchors.left: parent.left
-                anchors.top: parent.top
-                edges: Qt.LeftEdge | Qt.TopEdge
-                cursorShape: Qt.SizeFDiagCursor
-            }
-
-            ResizeEdge {
-                width: 12
-                height: 12
-                anchors.right: parent.right
-                anchors.top: parent.top
-                edges: Qt.RightEdge | Qt.TopEdge
-                cursorShape: Qt.SizeBDiagCursor
-            }
-
-            ResizeEdge {
-                width: 12
-                height: 12
-                anchors.left: parent.left
-                anchors.bottom: parent.bottom
-                edges: Qt.LeftEdge | Qt.BottomEdge
-                cursorShape: Qt.SizeBDiagCursor
-            }
-
-            ResizeEdge {
-                width: 12
-                height: 12
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                edges: Qt.RightEdge | Qt.BottomEdge
-                cursorShape: Qt.SizeFDiagCursor
-            }
-        }
-    }
-
-    // ═════════════════════════════════════════════════════════════
-    // 原生缩放手柄：只把鼠标按下转交给系统缩放循环
-    // ═════════════════════════════════════════════════════════════
-    component ResizeEdge: MouseArea {
-        id: handle
-
-        property int edges: 0
-
-        hoverEnabled: true
-        acceptedButtons: Qt.LeftButton
-
-        onPressed: window.startSystemResize(handle.edges)
     }
 
     // ═════════════════════════════════════════════════════════════
@@ -1135,13 +888,13 @@ ApplicationWindow {
             id: navHalo
             width: 58
             height: 58
-            radius: 16
+            radius: Theme.radiusCard
             anchors.centerIn: parent
             color: nav.selected
                    ? Theme.primarySoft
-                   : (navMouse.containsMouse ? Theme.surfaceAlt : Theme.transparent)
+                   : (navMouse.containsMouse ? Theme.fill : Theme.transparent)
             scale: navMouse.pressed
-                   ? 0.95
+                   ? 0.94
                    : (navMouse.containsMouse ? 1.02 : 1.0)
 
             Behavior on color {
@@ -1199,36 +952,6 @@ ApplicationWindow {
             }
         }
 
-        Rectangle {
-            width: 3
-            height: nav.selected ? 26 : 0
-            radius: 1.5
-            anchors.left: parent.left
-            anchors.leftMargin: 10
-            anchors.verticalCenter: parent.verticalCenter
-            opacity: nav.selected ? 1.0 : 0.0
-
-            gradient: Gradient {
-                orientation: Gradient.Vertical
-                GradientStop { position: 0.0; color: Theme.primary }
-                GradientStop { position: 1.0; color: Theme.primaryEnd }
-            }
-
-            Behavior on height {
-                NumberAnimation {
-                    duration: Theme.durationNormal
-                    easing.type: Easing.OutCubic
-                }
-            }
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: Theme.durationFast
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
         MouseArea {
             id: navMouse
             anchors.fill: parent
@@ -1261,11 +984,11 @@ ApplicationWindow {
         Rectangle {
             id: controlBackground
             anchors.fill: parent
-            radius: Theme.radiusControl
+            radius: 10
             color: mouse.containsMouse
-                   ? (control.danger ? Theme.dangerHover : Theme.surfaceAlt)
+                   ? (control.danger ? Theme.dangerHover : Theme.fill)
                    : Theme.transparent
-            scale: mouse.pressed ? 0.95 : 1.0
+            scale: mouse.pressed ? 0.94 : 1.0
 
             Behavior on color {
                 ColorAnimation {

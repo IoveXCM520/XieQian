@@ -73,8 +73,8 @@ Item {
     readonly property bool isEmpty: customWheel ? wheelOptions.length === 0
                                                 : rosterOptions.length === 0
     readonly property string wheelHint: (customWheel
-                                        ? "转动专属签盘，把选择交给一点点运气"
-                                        : "转动签盘，把选择交给一点点运气")
+                                        ? "把选项交给运气"
+                                        : "把名字交给运气")
                                         + " · "
                                         + (customWheel
                                            ? "选项 " + wheelOptions.length + " 个"
@@ -253,11 +253,6 @@ Item {
         }
     }
 
-    function requestPip() {
-        if (Window.window && typeof Window.window.enterPip === "function")
-            Window.window.enterPip()
-    }
-
     function endDrawLock() {
         drawLock = false
     }
@@ -356,10 +351,10 @@ Item {
                     Text {
                         Layout.alignment: Qt.AlignVCenter
                         text: page.busy
-                              ? "签运流转中，请稍候…"
+                              ? "正在为你挑选…"
                               : (page.isEmpty
-                                 ? (page.customWheel ? "添加选项后即可开始" : "导入名单后即可开始")
-                                 : "快速抽取")
+                                 ? (page.customWheel ? "先给转盘添几个选项" : "先导入一份数据吧")
+                                 : "一切就绪，随时开始")
                         color: Theme.textSecondary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontBody
@@ -376,7 +371,7 @@ Item {
                         id: importLink
                         visible: page.isEmpty && !page.customWheel
                         Layout.alignment: Qt.AlignVCenter
-                        text: "去导入"
+                        text: "去添加"
                         color: Theme.primary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontBody
@@ -406,11 +401,11 @@ Item {
 
             Item {
                 width: parent.width
-                height: 56
+                height: Theme.buttonHeight
 
                 PrimaryDrawButton {
-                    width: 240
-                    height: 56
+                    width: 260
+                    height: Theme.buttonHeight
                     anchors.centerIn: parent
                     active: !page.isEmpty && !page.busy
                     label: "开始抽奖"
@@ -501,6 +496,7 @@ Item {
                         contentHeight: height
                         clip: true
                         boundsBehavior: Flickable.StopAtBounds
+                        flickDeceleration: 2600
 
                         Row {
                             id: wheelTabRow
@@ -600,23 +596,6 @@ Item {
                         motionEnabled: page.animationEnabled
                         onFinished: page.finishDraw()
                     }
-
-                    // 画中画按钮紧贴转盘左右两侧，不再贴在卡片边缘
-                    PipButton {
-                        anchors.left: wheelItem.left
-                        anchors.leftMargin: -40
-                        anchors.verticalCenter: wheelItem.verticalCenter
-                        hint: "缩小为悬浮窗"
-                        onClicked: page.requestPip()
-                    }
-
-                    PipButton {
-                        anchors.right: wheelItem.right
-                        anchors.rightMargin: -40
-                        anchors.verticalCenter: wheelItem.verticalCenter
-                        hint: "缩小为悬浮窗"
-                        onClicked: page.requestPip()
-                    }
                 }
             }
         }
@@ -653,7 +632,7 @@ Item {
 
             Text {
                 width: parent.width
-                text: "删除转盘「" + page.deleteTargetName + "」？"
+                text: "删掉「" + page.deleteTargetName + "」这个转盘？"
                 color: Theme.textPrimary
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontH2
@@ -663,7 +642,7 @@ Item {
 
             Text {
                 width: parent.width
-                text: "删除后无法恢复，已产生的抽取历史不受影响。"
+                text: "删掉就找不回来了，抽过的记录还在。"
                 color: Theme.textSecondary
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontBody
@@ -682,14 +661,14 @@ Item {
                     DialogButton {
                         width: 92
                         height: 40
-                        label: "取消"
+                        label: "再想想"
                         onClicked: deleteWheelDialog.reject()
                     }
 
                     DialogButton {
                         width: 92
                         height: 40
-                        label: "删除"
+                        label: "删掉"
                         danger: true
                         onClicked: deleteWheelDialog.accept()
                     }
@@ -764,60 +743,6 @@ Item {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // 画中画按钮
-    // ─────────────────────────────────────────────────────────────
-    component PipButton: Item {
-        id: pipButton
-
-        property string hint: ""
-        signal clicked()
-
-        width: 34
-        height: 34
-        z: 20
-
-        Rectangle {
-            anchors.fill: parent
-            radius: width / 2
-            color: pipMouse.containsMouse
-                   ? Theme.primarySoft
-                   : Theme.withAlpha(Theme.surface, 0.94)
-            border.width: 1
-            border.color: pipMouse.containsMouse
-                          ? Theme.withAlpha(Theme.primary, 0.35)
-                          : Theme.withAlpha(Theme.textPrimary, 0.08)
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: Theme.durationFast
-                    easing.type: Easing.OutCubic
-                }
-            }
-        }
-
-        Text {
-            anchors.centerIn: parent
-            text: "—"
-            color: pipMouse.containsMouse ? Theme.primary : Theme.textSecondary
-            font.family: Theme.fontFamily
-            font.pixelSize: 15
-            font.weight: Font.DemiBold
-        }
-
-        MouseArea {
-            id: pipMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: pipButton.clicked()
-        }
-
-        ToolTip.visible: pipMouse.containsMouse
-        ToolTip.text: pipButton.hint
-        ToolTip.delay: 400
-    }
-
-    // ─────────────────────────────────────────────────────────────
     // 对话框按钮
     // ─────────────────────────────────────────────────────────────
     component DialogButton: Item {
@@ -829,7 +754,7 @@ Item {
 
         width: 92
         height: 40
-        scale: mouse.pressed ? 0.95 : (mouse.containsMouse ? 1.02 : 1.0)
+        scale: mouse.pressed ? 0.94 : 1.0
 
         Behavior on scale {
             NumberAnimation {
@@ -840,14 +765,14 @@ Item {
 
         Rectangle {
             anchors.fill: parent
-            radius: height / 2
+            radius: Theme.radiusButton
             color: button.danger
                    ? (mouse.containsMouse ? Theme.dangerSoft : Theme.surface)
-                   : (mouse.containsMouse ? Theme.surfaceAlt : Theme.surface)
+                   : (mouse.containsMouse ? Theme.fill : Theme.surface)
             border.width: 1
             border.color: button.danger
-                          ? Theme.withAlpha(Theme.danger, 0.45)
-                          : Theme.border
+                          ? Theme.withAlpha(Theme.danger, 0.35)
+                          : Theme.separator
 
             Behavior on color {
                 ColorAnimation {
@@ -881,10 +806,10 @@ Item {
     component PrimaryDrawButton: Item {
         id: button
 
-        implicitWidth: 240
-        implicitHeight: 56
-        width: 240
-        height: 56
+        implicitWidth: 260
+        implicitHeight: Theme.buttonHeight
+        width: 260
+        height: Theme.buttonHeight
 
         property string label: "开始抽奖"
         property bool active: true
@@ -892,9 +817,7 @@ Item {
 
         enabled: active
         opacity: active ? 1.0 : 0.45
-        scale: mouse.pressed && active
-               ? 0.95
-               : (mouse.containsMouse && active ? 1.02 : 1.0)
+        scale: mouse.pressed && active ? 0.96 : 1.0
 
         Behavior on opacity {
             NumberAnimation {
@@ -913,7 +836,7 @@ Item {
         Rectangle {
             id: buttonShadow
             anchors.fill: parent
-            radius: height / 2
+            radius: Theme.radiusButton
             gradient: Theme.primaryGradient
             layer.enabled: true
             layer.effect: MultiEffect {
@@ -929,7 +852,7 @@ Item {
         Rectangle {
             id: buttonBody
             anchors.fill: parent
-            radius: height / 2
+            radius: Theme.radiusButton
             gradient: Theme.primaryGradient
             border.width: 1
             border.color: Theme.withAlpha(Theme.white, 0.18)

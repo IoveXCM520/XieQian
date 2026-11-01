@@ -40,6 +40,12 @@ Item {
         }
     }
 
+    // 页面重新显示时再取一次：结果弹窗刚关闭就切过来也能看到最新记录
+    onVisibleChanged: {
+        if (visible)
+            refresh()
+    }
+
     Item {
         id: pageContent
         anchors.fill: parent
@@ -50,23 +56,24 @@ Item {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: 64
+            height: 76
 
             Column {
                 anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 4
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 12
+                spacing: 2
 
                 Text {
-                    text: "抽取历史"
+                    text: "历史"
                     color: Theme.textPrimary
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontH0
+                    font.pixelSize: Theme.fontLargeTitle
                     font.weight: Font.Bold
                 }
 
                 Text {
-                    text: "每一次中签，都值得被记住"
+                    text: "每一次选择，都值得被记住"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontBody
@@ -82,15 +89,15 @@ Item {
                     id: clearButton
 
                     width: clearLabel.implicitWidth + 26
-                    height: 32
-                    radius: 16
+                    height: 30
+                    radius: 15
                     enabled: page.recordCount > 0
                     opacity: enabled ? 1.0 : 0.45
                     color: clearMouse.containsMouse ? Theme.dangerSoft : Theme.surface
                     border.width: 1
                     border.color: clearMouse.containsMouse
-                                  ? Theme.withAlpha(Theme.danger, 0.35)
-                                  : Theme.border
+                                  ? Theme.withAlpha(Theme.danger, 0.30)
+                                  : Theme.separator
 
                     Behavior on color {
                         ColorAnimation {
@@ -102,7 +109,7 @@ Item {
                     Text {
                         id: clearLabel
                         anchors.centerIn: parent
-                        text: "清空所有历史"
+                        text: "抹除历史"
                         color: clearMouse.containsMouse ? Theme.danger : Theme.textPrimary
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontCaption
@@ -124,12 +131,10 @@ Item {
                 }
 
                 Rectangle {
-                    height: 32
+                    height: 30
                     width: historyCount.implicitWidth + 22
-                    radius: 16
+                    radius: 15
                     color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.withAlpha(Theme.primary, 0.10)
 
                     Text {
                         id: historyCount
@@ -148,7 +153,6 @@ Item {
             id: listView
 
             anchors.top: header.bottom
-            anchors.topMargin: 16
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
@@ -188,25 +192,6 @@ Item {
                 height: 68
                 radius: Theme.radiusListCard
                 color: Theme.surface
-                border.width: 1
-                border.color: cardMouse.containsMouse
-                              ? Theme.withAlpha(Theme.primary, 0.18)
-                              : Theme.withAlpha(Theme.textPrimary, 0.045)
-                scale: cardMouse.containsMouse ? 1.002 : 1.0
-
-                Behavior on border.color {
-                    ColorAnimation {
-                        duration: Theme.durationFast
-                        easing.type: Easing.OutCubic
-                    }
-                }
-
-                Behavior on scale {
-                    NumberAnimation {
-                        duration: Theme.durationFast
-                        easing.type: Easing.OutCubic
-                    }
-                }
 
                 MouseArea {
                     id: cardMouse
@@ -272,7 +257,7 @@ Item {
                             width: parent.width
                             text: modelData.studentId && modelData.studentId.length > 0
                                   ? modelData.studentId
-                                  : "中签记录"
+                                  : "抽取记录"
                             color: Theme.textSecondary
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontBody
@@ -289,7 +274,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            text: "中签"
+                            text: "已选中"
                             color: Theme.primary
                             font.family: Theme.fontFamily
                             font.pixelSize: 10
@@ -390,7 +375,7 @@ Item {
 
                     Text {
                         width: parent.width
-                        text: "还没有抽取记录"
+                        text: "这里还空着"
                         horizontalAlignment: Text.AlignHCenter
                         color: Theme.textPrimary
                         font.family: Theme.fontFamily
@@ -400,7 +385,7 @@ Item {
 
                     Text {
                         width: parent.width
-                        text: "完成一次抽签后，中签记录会出现在这里"
+                        text: "抽过一次之后，结果就会留在这里"
                         horizontalAlignment: Text.AlignHCenter
                         color: Theme.textSecondary
                         font.family: Theme.fontFamily
@@ -444,7 +429,7 @@ Item {
 
             Text {
                 width: parent.width
-                text: "清空全部 " + page.recordCount + " 条历史？"
+                text: "抹除这 " + page.recordCount + " 条记录？"
                 color: Theme.textPrimary
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontH2
@@ -454,7 +439,7 @@ Item {
 
             Text {
                 width: parent.width
-                text: "名单与自定义转盘不受影响，中签记录删除后无法恢复。"
+                text: "名单与自定义转盘不受影响，记录删掉就找不回来了。"
                 color: Theme.textSecondary
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontBody
@@ -480,7 +465,7 @@ Item {
                     DialogButton {
                         width: 92
                         height: 40
-                        label: "清空"
+                        label: "抹除"
                         danger: true
                         onClicked: clearDialog.accept()
                     }
