@@ -8,7 +8,7 @@ import ".."
     中奖贺卡。
     - 全屏半透明遮罩 + 白色大圆角弹窗
     - 单人中奖大字号渐变姓名；多人中奖网格排列
-    - AI 点评按钮与文本展示
+    - 姓名下方随机展示一句本地语录
     - “关闭”与“继续抽奖”两个动作
 */
 Item {
@@ -16,9 +16,110 @@ Item {
 
     property var winnerNames: []
     property bool opened: false
-    property bool aiBusy: false
-    property string aiSpeech: ""
-    property string aiError: ""
+    property string quote: ""
+
+    readonly property var quotes: [
+        "命运的齿轮开始转动",
+        "你就是今日的幸运星",
+        "远潮藏诗，此刻为你",
+        "所有伏笔，都在这一刻揭晓",
+        "光落在你身上，刚好",
+        "好运正在加速赶来",
+        "这一签，是宇宙偷偷偏爱你",
+        "风起时，答案已经有了",
+        "你从人海里，被点名成为惊喜",
+        "今天的运气，是限量款",
+        "把平凡的一刻，过成小庆典",
+        "心里有花，签上有光",
+        "这是属于你的高光三秒钟",
+        "恰好的时间，恰好的你",
+        "签筒很诚实，它说就是你",
+        "请查收这份突如其来的好运",
+        "你被幸运轻轻地拍了拍",
+        "万事胜意，从这一刻开始",
+        "星光不问赶路人，时光不负有心人",
+        "愿你此后所遇，皆是温柔",
+        "幸运没有剧本，却偏偏选中你",
+        "掌声给到这位天选之人",
+        "概率很小，你很大",
+        "抽中你的那一下，连风都在鼓掌",
+        "这一刻，签文为你折返",
+        "好事发生，正在加载 100%",
+        "你今天的运气，超标了",
+        "这一签，藏着小小的盛大",
+        "人间值得，你也值得",
+        "云端有信，落款是你",
+        "你的名字，是今天的答案",
+        "好运不是偶然，是你值得",
+        "请收下这份不讲道理的偏爱",
+        "生活偶尔发糖，这次发给了你",
+        "被选中的瞬间，世界安静了一秒",
+        "山海有归期，好运有回音",
+        "你一笑，签就亮了",
+        "这一刻，请允许自己得意一下",
+        "有风自南，吹来你的好运",
+        "这只是开始，后面还有更多",
+        "你是这份名单里最亮的注脚",
+        "灯亮起，主角是你",
+        "世界很大，幸运刚好路过你",
+        "签上有名，心里有光",
+        "把今天，记成一个小小的纪念日",
+        "被幸运点名，记得答“到”",
+        "你的好运，正在派送中",
+        "好事成双，先来一半",
+        "星河滚烫，你是人间理想",
+        "这一刻，山川都替你高兴",
+        "你是概率里的浪漫",
+        "抬头看，幸运正朝你走来",
+        "今天的小确幸，署名是你",
+        "生活的彩蛋，刚好砸中你",
+        "不必谦虚，这次就是你",
+        "风把你吹到了答案这一页",
+        "世界偷偷奖励了认真生活的你",
+        "被选中的感觉，还不错吧",
+        "一盏灯为你亮，一签为你留",
+        "愿这份惊喜，抵得过所有疲惫",
+        "好运有迹可循，线索是你的名字",
+        "抽中你，是今天最顺的事",
+        "你走过的路，都算数",
+        "命运敲门时，你刚好在家",
+        "这一签，祝你万事顺遂",
+        "幸运正在你的名字上停留",
+        "请保持微笑，你被好运看中了",
+        "生活偶尔偏心，这次偏向你",
+        "人群之中，光先找到了你",
+        "你值得所有不期而遇的欢喜",
+        "这一刻，请把好运据为己有",
+        "有请今日份的幸运儿",
+        "你被写进了今天的温柔里",
+        "一签落地，万事可期",
+        "风会记得你今天的笑",
+        "愿你所求皆如愿，所行皆坦途",
+        "被光选中的人，不必低头",
+        "这份运气，请慢慢用",
+        "你出现的时候，答案就出现了",
+        "今日签文：宜得意，宜欢喜",
+        "恭喜你，成为今日的小概率事件",
+        "这一下，抽出了整个春天",
+        "好运已在路上，请保持开机",
+        "你是被时光温柔以待的人",
+        "山高水长，好运常在",
+        "请把这份惊喜，讲给喜欢的人听",
+        "你在名单里，也在星光里",
+        "这个瞬间，值得被记住",
+        "愿你有好运气，也有好心情",
+        "今日份的浪漫，由你签收",
+        "被选中的一秒，值得庆祝一天",
+        "所有等待，都在此刻有了回音",
+        "你一笑，整间教室都亮了",
+        "这一签，签的是心想事成",
+        "好运不请自来，主角刚好是你",
+        "请允许今天，为你多亮一盏灯",
+        "你在的地方，就是好运的方向",
+        "愿这份小小幸运，陪你很久",
+        "恭喜，你被今天格外喜欢",
+        "命运的签，正好落在你手心"
+    ]
 
     readonly property bool multi: winnerNames.length > 1
     readonly property int columns: winnerNames.length <= 4 ? 2 : 3
@@ -50,9 +151,7 @@ Item {
         }
 
         winnerNames = list
-        aiBusy = false
-        aiSpeech = ""
-        aiError = ""
+        quote = quotes[Math.floor(Math.random() * quotes.length)]
         opened = true
     }
 
@@ -68,28 +167,6 @@ Item {
             return
         opened = false
         continueRequested()
-    }
-
-    function requestAiSpeech() {
-        if (aiBusy || firstWinner.length === 0)
-            return
-
-        aiBusy = true
-        aiError = ""
-
-        if (typeof backendBridge !== "undefined" && backendBridge
-                && backendBridge.aiManager) {
-            backendBridge.aiManager.generateAwardSpeech(firstWinner)
-        } else {
-            aiBusy = false
-            aiError = "AI 服务暂不可用"
-        }
-    }
-
-    onOpenedChanged: {
-        if (!opened) {
-            aiBusy = false
-        }
     }
 
     Keys.onEscapePressed: resultCard.close()
@@ -253,55 +330,12 @@ Item {
 
             Text {
                 width: parent.width
-                text: resultCard.multi
-                      ? "愿这份好签，落到每一位幸运的人身上"
-                      : "愿这份好签，带来课堂里的小小惊喜"
+                text: resultCard.quote
                 color: Theme.textSecondary
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontCaption
                 horizontalAlignment: Text.AlignHCenter
-            }
-
-            Item {
-                width: parent.width
-                height: 44
-
-                CardButton {
-                    anchors.centerIn: parent
-                    width: 190
-                    height: 40
-                    primary: false
-                    text: resultCard.aiBusy ? "AI 正在思考…" : "✨ 获取 AI 点评"
-                    enabled: !resultCard.aiBusy && resultCard.firstWinner.length > 0
-                    onClicked: resultCard.requestAiSpeech()
-                }
-            }
-
-            Rectangle {
-                width: parent.width
-                height: 64
-                radius: 12
-                color: Theme.surfaceAlt
-                visible: resultCard.aiBusy
-                         || resultCard.aiSpeech.length > 0
-                         || resultCard.aiError.length > 0
-
-                Text {
-                    anchors.fill: parent
-                    anchors.margins: 14
-                    text: resultCard.aiBusy
-                          ? "AI 正在为这次中签写一句颁奖词…"
-                          : (resultCard.aiError.length > 0
-                             ? resultCard.aiError
-                             : resultCard.aiSpeech)
-                    color: resultCard.aiError.length > 0
-                           ? Theme.danger
-                           : (resultCard.aiBusy ? Theme.textSecondary : Theme.textPrimary)
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontBody
-                    wrapMode: Text.WordWrap
-                    verticalAlignment: Text.AlignVCenter
-                }
+                wrapMode: Text.WordWrap
             }
         }
 
@@ -328,32 +362,6 @@ Item {
                 primary: true
                 onClicked: resultCard.continueDrawing()
             }
-        }
-    }
-
-    Connections {
-        target: backendBridge.aiManager
-        ignoreUnknownSignals: true
-
-        function onAwardSpeechReady(speech) {
-            if (!resultCard.opened)
-                return
-            resultCard.aiBusy = false
-            resultCard.aiSpeech = speech
-        }
-
-        function onAwardSpeechFailed(message) {
-            if (!resultCard.opened)
-                return
-            resultCard.aiBusy = false
-            resultCard.aiError = message
-        }
-
-        function onNetworkError(message) {
-            if (!resultCard.opened)
-                return
-            resultCard.aiBusy = false
-            resultCard.aiError = message
         }
     }
 

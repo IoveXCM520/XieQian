@@ -34,7 +34,7 @@ Item {
     property bool calcFresh: true
 
     readonly property var calcKeys: [
-        { "label": "C", "action": "clear", "row": 0, "column": 0, "accent": true },
+        { "label": "AC", "action": "clear", "row": 0, "column": 0, "accent": true },
         { "label": "⌫", "action": "back", "row": 0, "column": 1, "accent": true },
         { "label": "÷", "action": "op:÷", "row": 0, "column": 2, "accent": true },
         { "label": "×", "action": "op:×", "row": 0, "column": 3, "accent": true },
@@ -51,7 +51,8 @@ Item {
         { "label": "3", "action": "digit:3", "row": 3, "column": 2 },
         { "label": "=", "action": "equals", "row": 3, "column": 3,
           "rowSpan": 2, "accent": true },
-        { "label": "0", "action": "digit:0", "row": 4, "column": 0, "columnSpan": 2 },
+        { "label": "+/-", "action": "sign", "row": 4, "column": 0 },
+        { "label": "0", "action": "digit:0", "row": 4, "column": 1 },
         { "label": ".", "action": "dot", "row": 4, "column": 2 }
     ]
 
@@ -139,6 +140,18 @@ Item {
             calcDisplay += "."
     }
 
+    function calcToggleSign() {
+        if (calcDisplay === "错误" || calcDisplay === "0")
+            return
+
+        if (calcDisplay.charAt(0) === "-")
+            calcDisplay = calcDisplay.substring(1)
+        else
+            calcDisplay = "-" + calcDisplay
+
+        calcFresh = false
+    }
+
     function calcBackspace() {
         if (calcDisplay === "错误") {
             calcClear()
@@ -222,6 +235,8 @@ Item {
             calcBackspace()
         } else if (action === "dot") {
             calcInputDot()
+        } else if (action === "sign") {
+            calcToggleSign()
         } else if (action === "equals") {
             calcEquals()
         } else if (action.indexOf("digit:") === 0) {
@@ -506,9 +521,8 @@ Item {
 
                                 CardShadow {}
 
-                                width: Math.max(220, Math.min(300,
-                                                             (groupFlow.width - 14) / 2))
-                                height: groupColumn.childrenRect.height + 30
+                                width: Math.max(1, (groupFlow.width - groupFlow.spacing) / 2)
+                                height: groupContent.implicitHeight + 32
                                 radius: Theme.radiusListCard
                                 color: Theme.surface
                                 border.width: 1
@@ -540,16 +554,16 @@ Item {
                                 }
 
                                 Column {
-                                    id: groupColumn
+                                    id: groupContent
 
-                                    x: 16
-                                    y: 15
-                                    width: parent.width - 32
-                                    spacing: 8
+                                    x: 18
+                                    y: 16
+                                    width: parent.width - 36
+                                    spacing: 10
 
                                     Item {
                                         width: parent.width
-                                        height: 22
+                                        height: 20
 
                                         Text {
                                             anchors.left: parent.left
@@ -567,7 +581,7 @@ Item {
                                             text: modelData.length + " 人"
                                             color: Theme.textSecondary
                                             font.family: Theme.fontFamily
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fontMicro
                                         }
                                     }
 
@@ -577,18 +591,32 @@ Item {
                                         color: Theme.withAlpha(Theme.textPrimary, 0.045)
                                     }
 
-                                    Repeater {
-                                        model: modelData
+                                    Flow {
+                                        width: parent.width
+                                        spacing: 6
 
-                                        delegate: Text {
-                                            width: groupColumn.width
-                                            height: 22
-                                            text: modelData
-                                            color: Theme.textPrimary
-                                            font.family: Theme.fontFamily
-                                            font.pixelSize: Theme.fontBody
-                                            elide: Text.ElideRight
-                                            verticalAlignment: Text.AlignVCenter
+                                        Repeater {
+                                            model: modelData
+
+                                            delegate: Rectangle {
+                                                CardShadow {}
+
+                                                width: memberText.implicitWidth + 20
+                                                height: 28
+                                                radius: 10
+                                                color: Theme.surface
+                                                border.width: 1
+                                                border.color: Theme.withAlpha(Theme.textPrimary, 0.05)
+
+                                                Text {
+                                                    id: memberText
+                                                    anchors.centerIn: parent
+                                                    text: modelData
+                                                    color: Theme.textPrimary
+                                                    font.family: Theme.fontFamily
+                                                    font.pixelSize: Theme.fontCaption
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -602,7 +630,7 @@ Item {
                     width: Math.min(420, parent.width - 40)
                     text: page.rosterCount > 0
                           ? "设置组数后，点击“开始分组”"
-                          : "暂无名单，请先在名单页导入"
+                          : "暂无名单，请先在添加页导入"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontBody
@@ -629,21 +657,28 @@ Item {
                     Grid {
                         id: seatGrid
 
+                        readonly property real seatSpacing: 10
                         readonly property real cellWidth: Math.max(1,
-                            (seatFlick.width - columnSpacing * (page.seatColumns - 1))
+                            (seatFlick.width - seatSpacing * (page.seatColumns - 1))
                             / page.seatColumns)
-                        readonly property real cellHeight: 52
                         readonly property int rowCount: page.seatColumns > 0
                                                          ? Math.ceil(page.seats.length / page.seatColumns)
                                                          : 0
+                        // 行高随可用高度收缩，保证整张座位表完整落在可视区内
+                        readonly property real cellHeight: {
+                            if (rowCount <= 0)
+                                return 48
+                            var available = seatFlick.height - seatSpacing * (rowCount - 1) - 8
+                            return Math.max(40, Math.min(56, available / rowCount))
+                        }
 
                         width: seatFlick.width
                         height: rowCount > 0
-                                ? rowCount * cellHeight + (rowCount - 1) * rowSpacing
+                                ? rowCount * cellHeight + (rowCount - 1) * seatSpacing
                                 : 0
                         columns: page.seatColumns
-                        rowSpacing: 12
-                        columnSpacing: 12
+                        rowSpacing: seatSpacing
+                        columnSpacing: seatSpacing
 
                         Repeater {
                             model: page.seats
@@ -657,10 +692,10 @@ Item {
 
                                 width: seatGrid.cellWidth
                                 height: seatGrid.cellHeight
-                                radius: Theme.radiusListCard
+                                radius: 10
                                 color: Theme.surface
                                 border.width: 1
-                                border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
+                                border.color: Theme.withAlpha(Theme.textPrimary, 0.05)
                                 opacity: shown ? 1 : 0
 
                                 Behavior on opacity {
@@ -689,11 +724,11 @@ Item {
 
                                 Text {
                                     anchors.centerIn: parent
-                                    width: parent.width - 12
+                                    width: parent.width - 10
                                     text: modelData
                                     color: Theme.textPrimary
                                     font.family: Theme.fontFamily
-                                    font.pixelSize: Theme.fontBody
+                                    font.pixelSize: Theme.fontCaption
                                     font.weight: Font.DemiBold
                                     horizontalAlignment: Text.AlignHCenter
                                     elide: Text.ElideRight
@@ -708,7 +743,7 @@ Item {
                     width: Math.min(420, parent.width - 40)
                     text: page.rosterCount > 0
                           ? "点击“生成座位表”，随机安排课堂座位"
-                          : "暂无名单，请先在名单页导入"
+                          : "暂无名单，请先在添加页导入"
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontBody
@@ -784,7 +819,7 @@ Item {
                             }
                         }
 
-                        // 4 列键盘：数字、四则运算、小数点与清零
+                        // 4 列键盘：数字、四则运算、正负号、退格与 AC
                         GridLayout {
                             width: parent.width
                             columns: 4
@@ -925,12 +960,23 @@ Item {
 
         implicitWidth: 79
         implicitHeight: 52
-        scale: mouse.pressed ? 0.95 : (mouse.containsMouse ? 1.03 : 1.0)
+        scale: mouse.pressed ? 0.94 : (mouse.containsMouse ? 1.02 : 1.0)
 
         Behavior on scale {
             NumberAnimation {
                 duration: Theme.durationFast
                 easing.type: Easing.OutCubic
+            }
+        }
+
+        transform: Translate {
+            y: mouse.pressed ? 1 : 0
+
+            Behavior on y {
+                NumberAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
             }
         }
 
@@ -947,6 +993,22 @@ Item {
 
             Behavior on color {
                 ColorAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        // 按下的凹陷感：内层颜色压暗 + 向下 1px
+        Rectangle {
+            anchors.fill: parent
+            radius: 14
+            color: Theme.black
+            opacity: mouse.pressed ? 0.07 : 0.0
+            visible: opacity > 0.001
+
+            Behavior on opacity {
+                NumberAnimation {
                     duration: Theme.durationFast
                     easing.type: Easing.OutCubic
                 }

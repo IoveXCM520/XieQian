@@ -61,9 +61,14 @@ Item {
 
     readonly property bool isEmpty: customWheel ? wheelOptions.length === 0
                                                 : rosterOptions.length === 0
-    readonly property string wheelHint: customWheel
+    readonly property string wheelHint: (customWheel
                                         ? "转动专属签盘，把选择交给一点点运气"
-                                        : "转动签盘，把选择交给一点点运气"
+                                        : "转动签盘，把选择交给一点点运气")
+                                        + " · "
+                                        + (customWheel
+                                           ? "选项 " + wheelOptions.length + " 个"
+                                           : "名单 " + rosterOptions.length + " 人")
+    readonly property bool animationEnabled: backendBridge.motionEnabled
 
     signal importRosterRequested()
 
@@ -161,6 +166,10 @@ Item {
         }
 
         wheelItem.startSpin(pendingIndex)
+        if (!animationEnabled) {
+            page.finishDraw()
+            return
+        }
         safetyTimer.restart()
     }
 
@@ -211,10 +220,10 @@ Item {
             Window.window.showResult(lastWinners)
     }
 
-    function goToRoster() {
+    function goToImport() {
         importRosterRequested()
         if (Window.window && typeof Window.window.navigate === "function")
-            Window.window.navigate(2)
+            Window.window.navigate(1)
     }
 
     onIsEmptyChanged: {
@@ -346,7 +355,7 @@ Item {
                             anchors.margins: -4
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: page.goToRoster()
+                            onClicked: page.goToImport()
                         }
                     }
                 }
@@ -416,16 +425,16 @@ Item {
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
-                height: page.wheelChoices.length > 1 ? 128 : 100
+                height: page.wheelChoices.length > 1 ? 136 : 108
 
-                // 标题 + 标签组 + 提示作为一个整体居中：宽度取卡片的 60%，避免贴左或贴右
+                // 标题、标签组与提示作为一个整体居中，视觉重心落在盘面正上方
                 Column {
                     id: stageHeaderColumn
 
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.verticalCenter: parent.verticalCenter
-                    width: Math.min(stageCard.width * 0.6, 560)
-                    spacing: 8
+                    width: Math.min(stageCard.width * 0.72, 640)
+                    spacing: 10
 
                     Text {
                         width: parent.width
@@ -433,8 +442,9 @@ Item {
                         text: page.wheelName
                         color: Theme.textPrimary
                         font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontH0
+                        font.pixelSize: Theme.fontDisplay
                         font.weight: Font.Bold
+                        font.letterSpacing: 1
                         elide: Text.ElideRight
                     }
 
@@ -526,48 +536,10 @@ Item {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         text: page.wheelHint
-                        color: Theme.textSecondary
+                        color: Theme.textTertiary
                         font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontBody
+                        font.pixelSize: Theme.fontCaption
                         elide: Text.ElideRight
-                    }
-                }
-
-                Rectangle {
-                    anchors.right: parent.right
-                    anchors.rightMargin: 24
-                    anchors.verticalCenter: parent.verticalCenter
-                    height: 28
-                    width: countPillRow.implicitWidth + 20
-                    radius: 14
-                    color: Theme.surfaceAlt
-
-                    RowLayout {
-                        id: countPillRow
-                        anchors.centerIn: parent
-                        spacing: 6
-
-                        Rectangle {
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.preferredWidth: 6
-                            Layout.preferredHeight: 6
-                            radius: 3
-                            color: page.busy
-                                   ? Theme.primary
-                                   : (page.isEmpty ? Theme.textTertiary : Theme.success)
-                        }
-
-                        Text {
-                            Layout.alignment: Qt.AlignVCenter
-                            text: page.busy
-                                  ? "抽取中"
-                                  : (page.customWheel
-                                     ? "选项 " + page.wheelOptions.length + " 个"
-                                     : "名单 " + page.rosterOptions.length + " 人")
-                            color: Theme.textSecondary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontMicro
-                        }
                     }
                 }
             }
@@ -587,6 +559,7 @@ Item {
                     height: width
                     options: page.wheelOptions
                     showPointer: true
+                    motionEnabled: page.animationEnabled
                     onFinished: page.finishDraw()
                 }
             }

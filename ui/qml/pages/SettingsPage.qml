@@ -18,14 +18,10 @@ Item {
 
     function reloadAIConfig() {
         var config = backendBridge.getAIConfig()
-        if (config && config.apiKey !== undefined)
-            apiKeyField.text = String(config.apiKey)
-
-        var baseUrl = config && config.baseUrl !== undefined ? String(config.baseUrl) : ""
-        apiBaseField.text = baseUrl.length > 0 ? baseUrl : "https://api.deepseek.com"
-
-        var model = config && config.model !== undefined ? String(config.model) : ""
-        modelField.text = model.length > 0 ? model : "deepseek-chat"
+        // 留空的项不写回输入框，让 placeholder 展示内置默认值
+        apiKeyField.text = config && config.apiKey !== undefined ? String(config.apiKey) : ""
+        apiBaseField.text = config && config.baseUrl !== undefined ? String(config.baseUrl) : ""
+        modelField.text = config && config.model !== undefined ? String(config.model) : ""
     }
 
     function showToast(message) {
@@ -232,14 +228,81 @@ Item {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.margins: 20
-                        spacing: 8
+                        spacing: 12
 
-                        Text {
-                            text: "API Key"
-                            color: Theme.textPrimary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontBody
-                            font.weight: Font.DemiBold
+                        RowLayout {
+                            width: parent.width
+                            spacing: 12
+
+                            Column {
+                                Layout.fillWidth: true
+                                spacing: 4
+
+                                Text {
+                                    text: "接口配置"
+                                    color: Theme.textPrimary
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: Theme.fontBody
+                                    font.weight: Font.DemiBold
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "不填写也会自动使用内置密钥与官方接口，装好即用"
+                                    color: Theme.textSecondary
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: Theme.fontMicro
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.alignment: Qt.AlignTop
+                                Layout.preferredWidth: builtinChipText.implicitWidth + 18
+                                Layout.preferredHeight: 24
+                                radius: 12
+                                color: Theme.successSoft
+
+                                Text {
+                                    id: builtinChipText
+                                    anchors.centerIn: parent
+                                    text: "已内置"
+                                    color: Theme.success
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: 10
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 1
+                            color: Theme.withAlpha(Theme.textPrimary, 0.045)
+                        }
+
+                        Row {
+                            width: parent.width
+                            height: 18
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "API Key"
+                                color: Theme.textPrimary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontBody
+                                font.weight: Font.DemiBold
+                            }
+
+                            Text {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "留空则使用内置密钥"
+                                color: Theme.textTertiary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontMicro
+                            }
                         }
 
                         TextField {
@@ -249,7 +312,7 @@ Item {
                             height: 44
                             leftPadding: 14
                             rightPadding: 14
-                            placeholderText: "留空则使用程序内置密钥"
+                            placeholderText: "sk-...（不填也能用）"
                             placeholderTextColor: Theme.textTertiary
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily
@@ -268,13 +331,28 @@ Item {
                             }
                         }
 
-                        Text {
-                            text: "API Base URL"
-                            color: Theme.textPrimary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontBody
-                            font.weight: Font.DemiBold
-                            topPadding: 4
+                        Row {
+                            width: parent.width
+                            height: 18
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "API Base URL"
+                                color: Theme.textPrimary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontBody
+                                font.weight: Font.DemiBold
+                            }
+
+                            Text {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "默认 https://api.deepseek.com"
+                                color: Theme.textTertiary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontMicro
+                            }
                         }
 
                         TextField {
@@ -302,13 +380,28 @@ Item {
                             }
                         }
 
-                        Text {
-                            text: "模型名称"
-                            color: Theme.textPrimary
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontBody
-                            font.weight: Font.DemiBold
-                            topPadding: 4
+                        Row {
+                            width: parent.width
+                            height: 18
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "模型名称"
+                                color: Theme.textPrimary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontBody
+                                font.weight: Font.DemiBold
+                            }
+
+                            Text {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "默认 deepseek-flash"
+                                color: Theme.textTertiary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontMicro
+                            }
                         }
 
                         TextField {
@@ -318,7 +411,7 @@ Item {
                             height: 44
                             leftPadding: 14
                             rightPadding: 14
-                            placeholderText: "deepseek-chat"
+                            placeholderText: "deepseek-flash"
                             placeholderTextColor: Theme.textTertiary
                             color: Theme.textPrimary
                             font.family: Theme.fontFamily

@@ -10,6 +10,7 @@ import "../components"
 /*!
     新建转盘页。
     - 白色圆角卡片表单，四周 32px 留白
+    - 顶部“名单数据导入”区：CSV / TXT 与图片识别
     - 动态选项列表：可增删选项（2–200 个）
     - “保存并生成”后进入结果预览，可直接前往抽奖页
 */
@@ -20,6 +21,12 @@ Item {
     property string createdName: ""
     property var createdOptions: []
     property string errorMessage: ""
+
+    property bool ocrBusy: false
+    property string ocrStatus: ""
+    property string importMessage: ""
+    property bool importFailed: false
+    property bool fileImportPending: false
 
     readonly property int maxOptions: 200
     readonly property int minOptions: 2
@@ -123,11 +130,75 @@ Item {
             Window.window.navigate(0)
     }
 
+    function importRosterFile() {
+        if (backendBridge.rosterLoading)
+            return
+        importMessage = ""
+        importFailed = false
+        fileImportPending = true
+        backendBridge.openRosterFileDialog()
+        if (!backendBridge.rosterLoading)
+            fileImportPending = false
+    }
+
+    function startImageImport() {
+        if (ocrBusy || backendBridge.rosterLoading)
+            return
+
+        var path = backendBridge.chooseRosterImagePath()
+        if (!path || path.length === 0)
+            return
+
+        importMessage = ""
+        importFailed = false
+        ocrBusy = true
+        ocrStatus = "AI 正在分析数据结构..."
+        backendBridge.aiManager.ocrFromImage(path)
+    }
+
     onVisibleChanged: {
         if (visible && !generated) {
             Qt.callLater(function() {
                 nameField.forceActiveFocus()
             })
+        }
+    }
+
+    Connections {
+        target: backendBridge
+
+        function onRosterLoadingChanged() {
+            if (backendBridge.rosterLoading || !page.fileImportPending)
+                return
+
+            page.fileImportPending = false
+            page.importFailed = false
+            page.importMessage = "名单已更新，共 " + backendBridge.rosterCount + " 人"
+        }
+    }
+
+    Connections {
+        target: backendBridge.aiManager
+
+        function onOcrProgress(message) {
+            if (!page.ocrBusy)
+                return
+            page.ocrStatus = String(message)
+        }
+
+        function onOcrRosterReady(names) {
+            page.ocrBusy = false
+            page.ocrStatus = ""
+            page.importFailed = false
+            backendBridge.importRosterFromNames(names)
+            page.importMessage = "已从图片导入 " + names.length + " 人"
+        }
+
+        function onOcrFailed(message) {
+            page.ocrBusy = false
+            page.ocrStatus = ""
+            page.importFailed = true
+            page.importMessage = String(message)
         }
     }
 
@@ -164,27 +235,6 @@ Item {
                     color: Theme.textSecondary
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontBody
-                }
-            }
-
-            Rectangle {
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                width: customPill.implicitWidth + 22
-                height: 32
-                radius: 16
-                color: Theme.surface
-                border.width: 1
-                border.color: Theme.withAlpha(Theme.primary, 0.10)
-
-                Text {
-                    id: customPill
-                    anchors.centerIn: parent
-                    text: "自定义转盘"
-                    color: Theme.primary
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontCaption
-                    font.weight: Font.DemiBold
                 }
             }
         }
@@ -240,6 +290,85 @@ Item {
                         // 内容列再收窄 14px，删除按钮与右侧滚动条之间留出空隙
                         width: Math.max(0, formFlick.width - 14)
                         spacing: 0
+
+                        // ── 名单数据导入 ──
+                        Rectangle {
+                            width: parent.width
+                            height: importColumn.implicitHeight + 32
+                            radius: 12
+                            color: Theme.surfaceAlt
+                            border.width: 1
+                            border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
+
+                            Column {
+                                id: importColumn
+
+                                x: 16
+                                y: 16
+                                width: parent.width - 32
+                                spacing: 10
+
+                                Text {
+                                    text: "名单数据导入"
+                                    color: Theme.textPrimary
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: Theme.fontBody
+                                    font.weight: Font.DemiBold
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "导入 CSV / TXT 名单，或让 AI 识别名单截图；导入后可在名单页查看与编辑"
+                                    color: Theme.textSecondary
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: Theme.fontCaption
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                Row {
+                                    spacing: 10
+
+                                    ImportButton {
+                                        width: 124
+                                        height: 38
+                                        text: backendBridge.rosterLoading ? "正在解析…" : "导入名单"
+                                        primary: true
+                                        enabled: !backendBridge.rosterLoading && !page.ocrBusy
+                                        onClicked: page.importRosterFile()
+                                    }
+
+                                    ImportButton {
+                                        width: 124
+                                        height: 38
+                                        text: page.ocrBusy ? "识别中…" : "图片导入"
+                                        enabled: !backendBridge.rosterLoading && !page.ocrBusy
+                                        onClicked: page.startImageImport()
+                                    }
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    visible: page.ocrBusy
+                                    text: page.ocrStatus
+                                    color: Theme.primary
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: Theme.fontCaption
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    visible: !page.ocrBusy && page.importMessage.length > 0
+                                    text: page.importMessage
+                                    color: page.importFailed ? Theme.danger : Theme.textSecondary
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: Theme.fontCaption
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+
+                        Item { width: 1; height: 24 }
 
                         Row {
                             spacing: 8
@@ -833,6 +962,93 @@ Item {
             to: 32
             duration: 300
             easing.type: Easing.OutCubic
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 导入区按钮
+    // ─────────────────────────────────────────────────────────────
+    component ImportButton: Item {
+        id: button
+
+        property string text: ""
+        property bool primary: false
+        signal clicked()
+
+        width: 124
+        height: 38
+        enabled: true
+        opacity: enabled ? 1.0 : 0.45
+        scale: mouse.pressed && enabled
+               ? 0.95
+               : (mouse.containsMouse && enabled ? 1.02 : 1.0)
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: Theme.durationFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop {
+                    position: 0.0
+                    color: button.primary ? Theme.primary : Theme.surface
+                }
+                GradientStop {
+                    position: 1.0
+                    color: button.primary ? Theme.primaryEnd : Theme.surface
+                }
+            }
+            border.width: button.primary ? 0 : 1
+            border.color: Theme.border
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: button.primary ? Theme.white : Theme.primarySoft
+            opacity: mouse.containsMouse && button.enabled
+                     ? (button.primary ? 0.10 : 0.55)
+                     : 0.0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.durationFast
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+
+        Text {
+            anchors.centerIn: parent
+            text: button.text
+            color: button.primary ? Theme.white : Theme.primary
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontCaption
+            font.weight: Font.DemiBold
+        }
+
+        MouseArea {
+            id: mouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: button.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: {
+                if (button.enabled)
+                    button.clicked()
+            }
         }
     }
 

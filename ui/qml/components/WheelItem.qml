@@ -22,6 +22,8 @@ Item {
     property real angle: 0
     property bool spinActive: false
     property bool showPointer: true
+    // 关闭动效时不播放旋转动画，盘面直接落到目标角度
+    property bool motionEnabled: true
 
     readonly property bool spinning: spinAnimation.running
 
@@ -61,11 +63,17 @@ Item {
         var currentRotation = ((angle % 360) + 360) % 360
         // 归一化到 [0, 360)，每次都在当前角度上继续顺时针转，不会倒转
         var delta = ((targetRotation - currentRotation) % 360 + 360) % 360
+        var targetAngle = angle + 5 * 360 + delta + 0.001
+
+        if (!motionEnabled) {
+            angle = targetAngle
+            return
+        }
 
         spinActive = true
         spinAnimation.from = angle
         // 5 整圈 + 精确落点；0.001° 抵消浮点误差，确保停在扇区正中间而非分割线
-        spinAnimation.to = angle + 5 * 360 + delta + 0.001
+        spinAnimation.to = targetAngle
         spinAnimation.start()
     }
 
