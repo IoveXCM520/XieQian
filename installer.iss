@@ -1,5 +1,5 @@
 ﻿#define MyAppName "撷签"
-#define MyAppVersion "1.0.7.5"
+#define MyAppVersion "1.0.7.9"
 #define MyAppPublisher "XieQian"
 #define MyAppExeName "XieQian.exe"
 

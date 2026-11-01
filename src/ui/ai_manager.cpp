@@ -19,11 +19,7 @@
 namespace {
 
 constexpr int kRequestTimeoutMs = 15000;
-
-QString apiKey()
-{
-    return QString::fromUtf8(DEEPSEEK_API_KEY).trimmed();
-}
+constexpr const char *kDefaultBaseUrl = "https://api.deepseek.com";
 
 QString rosterPrompt()
 {
@@ -39,6 +35,53 @@ AiManager::AiManager(QObject *parent)
 }
 
 AiManager::~AiManager() = default;
+
+void AiManager::setApiConfig(const QString &apiKey, const QString &baseUrl)
+{
+    apiKey_ = apiKey.trimmed();
+    baseUrl_ = baseUrl.trimmed();
+}
+
+QString AiManager::effectiveApiKey() const
+{
+    if (!apiKey_.isEmpty()) {
+        return apiKey_;
+    }
+
+    // 内置密钥只发给官方地址：用户填写了第三方中转地址却没填 Key 时，
+    // 不应该把编译期密钥带过去
+    const QString base = baseUrl_.trimmed();
+    if (!base.isEmpty()) {
+        const QUrl url = QUrl::fromUserInput(base);
+        if (url.host().compare(QStringLiteral("api.deepseek.com"), Qt::CaseInsensitive) != 0) {
+            return QString();
+        }
+    }
+
+    return QString::fromUtf8(DEEPSEEK_API_KEY).trimmed();
+}
+
+QString AiManager::endpointUrl() const
+{
+    QString base = baseUrl_.trimmed();
+    if (base.isEmpty()) {
+        base = QString::fromLatin1(kDefaultBaseUrl);
+    }
+
+    if (!base.contains(QStringLiteral("://"))) {
+        base.prepend(QStringLiteral("https://"));
+    }
+
+    while (base.endsWith(QLatin1Char('/'))) {
+        base.chop(1);
+    }
+
+    // 允许用户填写 https://api.deepseek.com、.../v1，或直接填完整地址
+    if (base.endsWith(QStringLiteral("/chat/completions"), Qt::CaseInsensitive)) {
+        return base;
+    }
+    return base + QStringLiteral("/chat/completions");
+}
 
 void AiManager::generateMockRoster()
 {
@@ -60,9 +103,15 @@ void AiManager::generateAwardSpeech(const QString &winnerName)
 
 void AiManager::requestCompletion(const QString &prompt, RequestKind kind)
 {
-    const QString key = apiKey();
+    const QString key = effectiveApiKey();
     if (key.isEmpty()) {
         emitFailure(kind, QStringLiteral("未配置 AI 密钥"));
+        return;
+    }
+
+    const QUrl endpoint(endpointUrl());
+    if (!endpoint.isValid() || endpoint.host().isEmpty()) {
+        emitFailure(kind, QStringLiteral("AI 接口地址无效，请在设置页检查"));
         return;
     }
 
@@ -78,7 +127,7 @@ void AiManager::requestCompletion(const QString &prompt, RequestKind kind)
     payload.insert(QStringLiteral("messages"), messages);
     payload.insert(QStringLiteral("stream"), false);
 
-    QNetworkRequest request(QUrl(QStringLiteral("https://api.deepseek.com/chat/completions")));
+    QNetworkRequest request(endpoint);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     request.setRawHeader("Authorization", "Bearer " + key.toUtf8());
 

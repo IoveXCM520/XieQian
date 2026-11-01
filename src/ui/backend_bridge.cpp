@@ -93,6 +93,7 @@ BackendBridge::BackendBridge(QObject *parent)
             });
 
     loadState();
+    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_);
 }
 
 void BackendBridge::loadState()
@@ -520,12 +521,33 @@ void BackendBridge::clearAllData()
     history_.clear();
     customWheels_.clear();
     activeWheelName_.clear();
+    aiApiKey_.clear();
+    aiBaseUrl_.clear();
+    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_);
     drawEngine_->clearDrawnHistory();
 
     saveState();
     emit rosterUpdated();
     emit historyUpdated();
     emit customWheelsChanged();
+    emit aiConfigChanged();
+}
+
+void BackendBridge::saveAIConfig(const QString &apiKey, const QString &baseUrl)
+{
+    aiApiKey_ = apiKey.trimmed();
+    aiBaseUrl_ = baseUrl.trimmed();
+    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_);
+    saveState();
+    emit aiConfigChanged();
+}
+
+QVariantMap BackendBridge::getAIConfig()
+{
+    QVariantMap config;
+    config.insert(QStringLiteral("apiKey"), aiApiKey_);
+    config.insert(QStringLiteral("baseUrl"), aiBaseUrl_);
+    return config;
 }
 
 int BackendBridge::currentDrawMode() const
@@ -667,6 +689,8 @@ QJsonObject BackendBridge::stateToJson() const
     root.insert(QStringLiteral("history"), history);
     root.insert(QStringLiteral("customWheels"), customWheels);
     root.insert(QStringLiteral("activeWheel"), activeWheelName_);
+    root.insert(QStringLiteral("aiApiKey"), aiApiKey_);
+    root.insert(QStringLiteral("aiBaseUrl"), aiBaseUrl_);
     root.insert(QStringLiteral("soundEnabled"), soundEnabled_);
     root.insert(QStringLiteral("motionEnabled"), motionEnabled_);
     return root;
@@ -730,6 +754,10 @@ void BackendBridge::applyData(const QJsonObject &root)
     if (active == customWheels_.end()) {
         activeWheelName_ = customWheels_.empty() ? QString() : customWheels_.back().name;
     }
+
+    aiApiKey_ = root.value(QStringLiteral("aiApiKey")).toString().trimmed();
+    aiBaseUrl_ = root.value(QStringLiteral("aiBaseUrl")).toString().trimmed();
+    aiManager_->setApiConfig(aiApiKey_, aiBaseUrl_);
 
     soundEnabled_ = root.value(QStringLiteral("soundEnabled")).toBool(true);
     motionEnabled_ = root.value(QStringLiteral("motionEnabled")).toBool(true);
@@ -801,4 +829,5 @@ void BackendBridge::importData(const QString &filePath)
         emit motionEnabledChanged();
     }
     emit customWheelsChanged();
+    emit aiConfigChanged();
 }

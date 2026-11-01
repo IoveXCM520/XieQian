@@ -16,6 +16,28 @@ Item {
 
     property string pendingRestorePath: ""
 
+    function reloadAIConfig() {
+        var config = backendBridge.getAIConfig()
+        if (config && config.apiKey !== undefined)
+            apiKeyField.text = String(config.apiKey)
+        if (config && config.baseUrl !== undefined)
+            apiBaseField.text = String(config.baseUrl)
+    }
+
+    function showToast(message) {
+        toast.show(message)
+    }
+
+    Component.onCompleted: reloadAIConfig()
+
+    Connections {
+        target: backendBridge
+
+        function onAiConfigChanged() {
+            page.reloadAIConfig()
+        }
+    }
+
     Item {
         id: pageContent
         anchors.fill: parent
@@ -173,6 +195,136 @@ Item {
                             checked: backendBridge.motionEnabled
                             onToggled: function(value) {
                                 backendBridge.motionEnabled = value
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    text: "AI 助手配置"
+                    color: Theme.textSecondary
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontCaption
+                    font.weight: Font.DemiBold
+                    topPadding: 14
+                    bottomPadding: 2
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: aiColumn.height + 40
+                    radius: Theme.radiusListCard
+                    color: Theme.surface
+                    border.width: 1
+                    border.color: Theme.withAlpha(Theme.textPrimary, 0.045)
+
+                    CardShadow {}
+
+                    Column {
+                        id: aiColumn
+
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.margins: 20
+                        spacing: 8
+
+                        Text {
+                            text: "API Key"
+                            color: Theme.textPrimary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontBody
+                            font.weight: Font.DemiBold
+                        }
+
+                        TextField {
+                            id: apiKeyField
+
+                            width: parent.width
+                            height: 44
+                            leftPadding: 14
+                            rightPadding: 14
+                            placeholderText: "留空则使用程序内置密钥"
+                            placeholderTextColor: Theme.textTertiary
+                            color: Theme.textPrimary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontBody
+                            selectByMouse: true
+                            echoMode: TextInput.Password
+                            maximumLength: 256
+
+                            background: Rectangle {
+                                radius: Theme.radiusControl
+                                color: apiKeyField.activeFocus ? Theme.surface : Theme.surfaceAlt
+                                border.width: 1
+                                border.color: apiKeyField.activeFocus
+                                              ? Theme.primary
+                                              : Theme.withAlpha(Theme.textPrimary, 0.06)
+                            }
+                        }
+
+                        Text {
+                            text: "API Base URL"
+                            color: Theme.textPrimary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontBody
+                            font.weight: Font.DemiBold
+                            topPadding: 4
+                        }
+
+                        TextField {
+                            id: apiBaseField
+
+                            width: parent.width
+                            height: 44
+                            leftPadding: 14
+                            rightPadding: 14
+                            placeholderText: "https://api.deepseek.com"
+                            placeholderTextColor: Theme.textTertiary
+                            color: Theme.textPrimary
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontBody
+                            selectByMouse: true
+                            maximumLength: 512
+
+                            background: Rectangle {
+                                radius: Theme.radiusControl
+                                color: apiBaseField.activeFocus ? Theme.surface : Theme.surfaceAlt
+                                border.width: 1
+                                border.color: apiBaseField.activeFocus
+                                              ? Theme.primary
+                                              : Theme.withAlpha(Theme.textPrimary, 0.06)
+                            }
+                        }
+
+                        Item {
+                            width: parent.width
+                            height: 38
+
+                            Text {
+                                width: parent.width - 128
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "支持 DeepSeek、硅基流动等 OpenAI 兼容接口"
+                                color: Theme.textSecondary
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontMicro
+                                elide: Text.ElideRight
+                            }
+
+                            SettingButton {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 112
+                                height: 38
+                                text: "保存配置"
+                                soft: true
+                                onClicked: {
+                                    backendBridge.saveAIConfig(apiKeyField.text,
+                                                               apiBaseField.text)
+                                    page.showToast("配置已保存")
+                                }
                             }
                         }
                     }
@@ -358,6 +510,63 @@ Item {
                     width: parent.width
                     height: 16
                 }
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 轻量 Toast
+    // ─────────────────────────────────────────────────────────────
+    Rectangle {
+        id: toast
+
+        property string message: ""
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 28
+        width: toastText.implicitWidth + 40
+        height: 40
+        radius: 20
+        color: Theme.withAlpha(Theme.textPrimary, 0.9)
+        opacity: 0.0
+        visible: opacity > 0
+        z: 100
+
+        Text {
+            id: toastText
+            anchors.centerIn: parent
+            text: toast.message
+            color: Theme.white
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontCaption
+            font.weight: Font.DemiBold
+        }
+
+        function show(text) {
+            message = text
+            toastAnimation.restart()
+        }
+
+        SequentialAnimation {
+            id: toastAnimation
+
+            NumberAnimation {
+                target: toast
+                property: "opacity"
+                to: 1.0
+                duration: 160
+                easing.type: Easing.OutCubic
+            }
+
+            PauseAnimation { duration: 1600 }
+
+            NumberAnimation {
+                target: toast
+                property: "opacity"
+                to: 0.0
+                duration: 260
+                easing.type: Easing.OutCubic
             }
         }
     }

@@ -55,6 +55,8 @@ public:
     Q_INVOKABLE QVariantList getHistory();
     Q_INVOKABLE void clearHistory();
     Q_INVOKABLE void clearAllData();
+    Q_INVOKABLE void saveAIConfig(const QString &apiKey, const QString &baseUrl);
+    Q_INVOKABLE QVariantMap getAIConfig();
     Q_INVOKABLE QString chooseBackupPath();
     Q_INVOKABLE QString chooseRestorePath();
     Q_INVOKABLE void exportData(const QString &filePath);
@@ -91,6 +93,7 @@ signals:
     void motionEnabledChanged();
     void rosterLoadingChanged();
     void customWheelsChanged();
+    void aiConfigChanged();
 
 private:
     struct HistoryEntry {
@@ -118,6 +121,8 @@ private:
     std::vector<HistoryEntry> history_;
     std::vector<CustomWheel> customWheels_;
     QString activeWheelName_;
+    QString aiApiKey_;
+    QString aiBaseUrl_;
     DrawMode currentDrawMode_ = DrawMode::Wheel;
     int drawCount_ = 1;
     xieqian::core::DrawStrategy drawStrategy_ = xieqian::core::DrawStrategy::Random;

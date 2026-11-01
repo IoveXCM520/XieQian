@@ -27,8 +27,53 @@ ApplicationWindow {
 
     readonly property int sidebarWidth: Theme.sidebarWidth
     readonly property int titleBarHeight: Theme.titleBarHeight
-    readonly property bool isMaximized: visibility === Window.Maximized
-                                             || visibility === Window.FullScreen
+
+    // 自定义最大化：不使用系统 showMaximized()，避免无边框窗口原生切换时
+    // 内容裁切、黑屏与长时间卡顿
+    property bool isMaximized: false
+    property bool dragging: false
+    property bool resizing: false
+    property rect normalGeometry: Qt.rect(0, 0, 1200, 800)
+    // 创建阶段关闭动画，避免初始 1200x800 被当成一次变更而产生启动缩放
+    property bool windowReady: false
+
+    // 手写拖拽 / 缩放期间关闭几何动画，避免与鼠标位移产生黏滞
+    readonly property bool geometryAnimationEnabled: windowReady && !dragging && !resizing
+
+    Component.onCompleted: windowReady = true
+
+    Behavior on x {
+        enabled: window.geometryAnimationEnabled
+        NumberAnimation {
+            duration: 250
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    Behavior on y {
+        enabled: window.geometryAnimationEnabled
+        NumberAnimation {
+            duration: 250
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    Behavior on width {
+        enabled: window.geometryAnimationEnabled
+        NumberAnimation {
+            duration: 250
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    Behavior on height {
+        enabled: window.geometryAnimationEnabled
+        NumberAnimation {
+            duration: 250
+            easing.type: Easing.OutCubic
+        }
+    }
+
     readonly property bool reducedMotion: {
         if (typeof backendBridge !== "undefined" && backendBridge)
             return !backendBridge.motionEnabled
@@ -38,27 +83,6 @@ ApplicationWindow {
     property int currentPage: 0
     property int pendingPage: 0
     property bool resultOpen: false
-    // 记录还原前的窗口位置，供最大化状态下拖动标题栏时使用
-    property rect normalGeometry: Qt.rect(0, 0, 1200, 800)
-
-    onVisibilityChanged: {
-        if (visibility === Window.Windowed)
-            Qt.callLater(window.recordNormalGeometry)
-
-        // 最大化/还原会打断页面切换动画，复位避免内容停留在偏移位置
-        pageSwitch.stop()
-        pageStack.y = 0
-        pageViewport.opacity = 1.0
-    }
-
-    // 延迟到窗口状态切换完成后再采样，避免把最大化尺寸当成还原尺寸
-    function recordNormalGeometry() {
-        if (visibility !== Window.Windowed || width <= 0 || height <= 0)
-            return
-        if (screen && width >= screen.width && height >= screen.height)
-            return
-        normalGeometry = Qt.rect(x, y, width, height)
-    }
 
     function showResult(names) {
         resultCard.open(names)
@@ -90,15 +114,41 @@ ApplicationWindow {
     }
 
     function toggleMaximize() {
-        if (visibility === Window.Maximized || visibility === Window.FullScreen)
-            showNormal()
-        else
-            showMaximized()
+        if (isMaximized) {
+            isMaximized = false
+            x = normalGeometry.x
+            y = normalGeometry.y
+            width = normalGeometry.width
+            height = normalGeometry.height
+            return
+        }
+
+        // 记录当前几何，供还原动画使用
+        normalGeometry = Qt.rect(x, y, width, height)
+        isMaximized = true
+
+        var screenWidth = Screen.desktopAvailableWidth
+        var screenHeight = Screen.desktopAvailableHeight
+        if (!(screenWidth > 0) || !(screenHeight > 0)) {
+            screenWidth = window.screen ? window.screen.width : width
+            screenHeight = window.screen ? window.screen.height : height
+        }
+
+        x = 0
+        y = 0
+        width = screenWidth
+        height = screenHeight
     }
 
     Rectangle {
         id: windowPanel
-        anchors.fill: parent
+
+        // 直接跟随窗口尺寸而不是父节点：即使无边框窗口在极短时间内完成尺寸切换，
+        // 也不会因为内容层尺寸滞后而出现整页错位
+        anchors.top: parent.top
+        anchors.left: parent.left
+        width: window.width
+        height: window.height
         radius: window.isMaximized ? 0 : Theme.radiusWindow
         color: Theme.background
         border.width: window.isMaximized ? 0 : 1
@@ -133,56 +183,44 @@ ApplicationWindow {
                 acceptedButtons: Qt.LeftButton
 
                 property point pressPoint
-                property bool moving: false
+                property point pressWindow
+                property point pressGlobal
 
                 onPressed: function(mouse) {
                     pressPoint = Qt.point(mouse.x, mouse.y)
-                    moving = false
+                    pressWindow = Qt.point(window.x, window.y)
+                    pressGlobal = Qt.point(window.x + mouse.x, window.y + mouse.y)
+                    window.dragging = false
                 }
 
                 onPositionChanged: function(mouse) {
-                    if (!pressed || moving)
+                    if (!pressed)
                         return
 
-                    if (Math.abs(mouse.x - pressPoint.x) <= 4
-                            && Math.abs(mouse.y - pressPoint.y) <= 4)
+                    if (!window.dragging
+                            && Math.abs(mouse.x - pressPoint.x) <= 2
+                            && Math.abs(mouse.y - pressPoint.y) <= 2)
                         return
 
-                    moving = true
+                    // 最大化窗口不支持拖动，避免与还原动画互相干扰
+                    if (window.isMaximized)
+                        return
 
-                    // 最大化状态下 startSystemMove() 不会生效：先按指针比例还原窗口尺寸，
-                    // 再让系统接管拖动，避免出现“拖不动”或窗口被拽变形
-                    if (window.visibility === Window.Maximized
-                            || window.visibility === Window.FullScreen) {
-                        var scenePoint = titleDragArea.mapToItem(null, mouse.x, mouse.y)
-                        var screenX = window.x + scenePoint.x
-                        var screenY = window.y + scenePoint.y
-                        var ratio = window.width > 0 ? scenePoint.x / window.width : 0.5
-                        var screenWidth = window.screen ? window.screen.width : window.width
-                        var screenHeight = window.screen ? window.screen.height : window.height
-                        var restoreWidth = Math.max(window.minimumWidth,
-                                                    Math.min(window.normalGeometry.width, screenWidth))
-                        var restoreHeight = Math.max(window.minimumHeight,
-                                                     Math.min(window.normalGeometry.height, screenHeight))
+                    window.dragging = true
 
-                        window.showNormal()
-                        window.width = restoreWidth
-                        window.height = restoreHeight
-                        window.x = Math.round(screenX - ratio * restoreWidth)
-                        window.y = Math.round(screenY - mouse.y)
-                    }
-
-                    window.startSystemMove()
+                    // 用指针的屏幕坐标驱动窗口位置：窗口跟随指针后，
+                    // mouse 坐标也会随窗口一起变化，直接累加增量会抖动
+                    var globalX = window.x + mouse.x
+                    var globalY = window.y + mouse.y
+                    window.x = Math.round(pressWindow.x + globalX - pressGlobal.x)
+                    window.y = Math.round(pressWindow.y + globalY - pressGlobal.y)
                 }
 
-                onReleased: function(mouse) {
-                    moving = false
-                }
-
-                onCanceled: moving = false
+                onReleased: window.dragging = false
+                onCanceled: window.dragging = false
 
                 onDoubleClicked: function(mouse) {
-                    if (moving)
+                    if (window.dragging)
                         return
                     window.toggleMaximize()
                 }
@@ -413,7 +451,7 @@ ApplicationWindow {
         }
 
         // ─────────────────────────────────────────────────────────
-        // 八方向缩放热区
+        // 八方向缩放热区：手写几何拖拽，不依赖系统 startSystemResize()
         // ─────────────────────────────────────────────────────────
         Item {
             id: resizeBorders
@@ -423,86 +461,153 @@ ApplicationWindow {
             // 最大化时整个缩放热区失效，避免抢占标题栏与内容区的鼠标事件
             visible: !window.isMaximized
 
-            MouseArea {
+            ResizeHandle {
                 width: parent.width - 24
-                height: 6
+                height: 5
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
-                enabled: !window.isMaximized
+                edgeTop: true
                 cursorShape: Qt.SizeVerCursor
-                onPressed: window.startSystemResize(Qt.TopEdge)
             }
 
-            MouseArea {
+            ResizeHandle {
                 width: parent.width - 24
-                height: 6
+                height: 5
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
-                enabled: !window.isMaximized
+                edgeBottom: true
                 cursorShape: Qt.SizeVerCursor
-                onPressed: window.startSystemResize(Qt.BottomEdge)
             }
 
-            MouseArea {
-                width: 6
+            ResizeHandle {
+                width: 5
                 height: parent.height - 24
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.left: parent.left
-                enabled: !window.isMaximized
+                edgeLeft: true
                 cursorShape: Qt.SizeHorCursor
-                onPressed: window.startSystemResize(Qt.LeftEdge)
             }
 
-            MouseArea {
-                width: 6
+            ResizeHandle {
+                width: 5
                 height: parent.height - 24
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
-                enabled: !window.isMaximized
+                edgeRight: true
                 cursorShape: Qt.SizeHorCursor
-                onPressed: window.startSystemResize(Qt.RightEdge)
             }
 
-            MouseArea {
+            ResizeHandle {
                 width: 12
                 height: 12
                 anchors.left: parent.left
                 anchors.top: parent.top
-                enabled: !window.isMaximized
+                edgeLeft: true
+                edgeTop: true
                 cursorShape: Qt.SizeFDiagCursor
-                onPressed: window.startSystemResize(Qt.LeftEdge | Qt.TopEdge)
             }
 
-            MouseArea {
+            ResizeHandle {
                 width: 12
                 height: 12
                 anchors.right: parent.right
                 anchors.top: parent.top
-                enabled: !window.isMaximized
+                edgeRight: true
+                edgeTop: true
                 cursorShape: Qt.SizeBDiagCursor
-                onPressed: window.startSystemResize(Qt.RightEdge | Qt.TopEdge)
             }
 
-            MouseArea {
+            ResizeHandle {
                 width: 12
                 height: 12
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
-                enabled: !window.isMaximized
+                edgeLeft: true
+                edgeBottom: true
                 cursorShape: Qt.SizeBDiagCursor
-                onPressed: window.startSystemResize(Qt.LeftEdge | Qt.BottomEdge)
             }
 
-            MouseArea {
+            ResizeHandle {
                 width: 12
                 height: 12
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                enabled: !window.isMaximized
+                edgeRight: true
+                edgeBottom: true
                 cursorShape: Qt.SizeFDiagCursor
-                onPressed: window.startSystemResize(Qt.RightEdge | Qt.BottomEdge)
             }
         }
+    }
+
+    // ═════════════════════════════════════════════════════════════
+    // 手写缩放：按下时记录窗口几何，拖动时把指针位移换算成四边变化
+    // ═════════════════════════════════════════════════════════════
+    component ResizeHandle: MouseArea {
+        id: handle
+
+        property bool edgeLeft: false
+        property bool edgeRight: false
+        property bool edgeTop: false
+        property bool edgeBottom: false
+
+        property point pressGlobal
+        property rect startGeometry
+
+        hoverEnabled: true
+        enabled: !window.isMaximized
+
+        onPressed: function(mouse) {
+            pressGlobal = Qt.point(window.x + mouse.x, window.y + mouse.y)
+            startGeometry = Qt.rect(window.x, window.y, window.width, window.height)
+            window.resizing = true
+        }
+
+        onPositionChanged: function(mouse) {
+            if (!pressed)
+                return
+
+            // 指针的屏幕坐标：窗口移动后 mouse 会随之变化，加回窗口坐标才是真实位置
+            var dx = (window.x + mouse.x) - pressGlobal.x
+            var dy = (window.y + mouse.y) - pressGlobal.y
+
+            var nextX = startGeometry.x
+            var nextY = startGeometry.y
+            var nextWidth = startGeometry.width
+            var nextHeight = startGeometry.height
+
+            if (handle.edgeLeft) {
+                nextX = startGeometry.x + dx
+                nextWidth = startGeometry.width - dx
+            } else if (handle.edgeRight) {
+                nextWidth = startGeometry.width + dx
+            }
+
+            if (handle.edgeTop) {
+                nextY = startGeometry.y + dy
+                nextHeight = startGeometry.height - dy
+            } else if (handle.edgeBottom) {
+                nextHeight = startGeometry.height + dy
+            }
+
+            if (nextWidth < window.minimumWidth) {
+                nextWidth = window.minimumWidth
+                if (handle.edgeLeft)
+                    nextX = startGeometry.x + startGeometry.width - nextWidth
+            }
+            if (nextHeight < window.minimumHeight) {
+                nextHeight = window.minimumHeight
+                if (handle.edgeTop)
+                    nextY = startGeometry.y + startGeometry.height - nextHeight
+            }
+
+            window.x = Math.round(nextX)
+            window.y = Math.round(nextY)
+            window.width = Math.round(nextWidth)
+            window.height = Math.round(nextHeight)
+        }
+
+        onReleased: window.resizing = false
+        onCanceled: window.resizing = false
     }
 
     // ═════════════════════════════════════════════════════════════
@@ -510,7 +615,11 @@ ApplicationWindow {
     // ═════════════════════════════════════════════════════════════
     ResultCard {
         id: resultCard
-        anchors.fill: parent
+
+        x: 0
+        y: 0
+        width: window.width
+        height: window.height
         z: 95000
 
         onOpenedChanged: window.resultOpen = opened
@@ -528,7 +637,11 @@ ApplicationWindow {
     // ═════════════════════════════════════════════════════════════
     Item {
         id: splashScreen
-        anchors.fill: parent
+
+        x: 0
+        y: 0
+        width: window.width
+        height: window.height
         z: 100000
         visible: true
         opacity: 1.0

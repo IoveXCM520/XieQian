@@ -14,8 +14,6 @@ import ".."
 Item {
     id: resultCard
 
-    anchors.fill: parent
-
     property var winnerNames: []
     property bool opened: false
     property bool aiBusy: false
